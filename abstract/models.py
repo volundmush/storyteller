@@ -46,10 +46,10 @@ class AbstractPersona(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
     character = models.ForeignKey('objects.ObjectDB', related_name='personas')
     active = models.BooleanField(default=True)
-    template = models.ForeignKey('AbstractTemplate', related_name='personas')
-    category1 = models.ForeignKey('AbstractCategory', related_name='personas_1', null=True)
-    category2 = models.ForeignKey('AbstractCategory', related_name='personas_2', null=True)
-    category3 = models.ForeignKey('AbstractCategory', related_name='personas_3', null=True)
+    #template = models.ForeignKey('AbstractTemplate', related_name='personas')
+    #category1 = models.ForeignKey('AbstractCategory', related_name='personas_1', null=True)
+    #category2 = models.ForeignKey('AbstractCategory', related_name='personas_2', null=True)
+    #category3 = models.ForeignKey('AbstractCategory', related_name='personas_3', null=True)
 
     class Meta:
         abstract = True
@@ -89,7 +89,7 @@ class AbstractTemplate(models.Model):
 
 class AbstractCategory(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
-    template = models.ForeignKey('AbstractTemplate', related_name='categories')
+    #template = models.ForeignKey('AbstractTemplate', related_name='categories')
     category = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
@@ -97,7 +97,7 @@ class AbstractCategory(models.Model):
 
 class AbstractSheetColor(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
-    template = models.OneToOneField('AbstractTemplate', related_name='sheet_colors')
+    #template = models.OneToOneField('AbstractTemplate', related_name='sheet_colors')
     title = models.CharField(max_length=20, default='n', validators=[validate_color])
     border = models.CharField(max_length=20, default='n', validators=[validate_color])
     textfield = models.CharField(max_length=20, default='n', validators=[validate_color])
@@ -117,16 +117,16 @@ class AbstractSheetColor(models.Model):
 
     class Meta:
         abstract = True
-        unique_together = (('template', 'key'),)
+        #unique_together = (('template', 'key'),)
 
 
 class AbstractTrait(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
-    template = models.ForeignKey('AbstractTemplate', related_name='trait_choices')
+    #template = models.ForeignKey('AbstractTemplate', related_name='trait_choices')
 
     class Meta:
         abstract = True
-        unique_together = (('template', 'key'),)
+        #unique_together = (('template', 'key'),)
 
     def add_option(self, name):
         old = self.options.filter(key__iexact=name).first()
@@ -143,17 +143,17 @@ class AbstractTrait(models.Model):
 
 
 class AbstractTraitValue(models.Model):
-    trait = models.ForeignKey('AbstractTrait', related_name='values')
+    #trait = models.ForeignKey('AbstractTrait', related_name='values')
     key = models.CharField(max_length=255, db_index=True)
 
     class Meta:
         abstract = True
-        unique_together = (('trait', 'key'),)
+        #unique_together = (('trait', 'key'),)
 
 
 class AbstractPersonaTraitValue(models.Model):
-    value = models.ForeignKey('AbstractTraitValue', related_name='personas')
-    persona = models.ForeignKey('AbstractPersona', related_name='traits')
+    #value = models.ForeignKey('AbstractTraitValue', related_name='personas')
+    #persona = models.ForeignKey('AbstractPersona', related_name='traits')
 
     class Meta:
         abstract = True
@@ -162,7 +162,7 @@ class AbstractPersonaTraitValue(models.Model):
 class AbstractStat(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
     start_rating = models.PositiveSmallIntegerField(default=0, db_index=True, null=True)
-    features = models.ManyToManyField('AbstractStatTag', related_name='stats')
+    #features = models.ManyToManyField('AbstractStatTag', related_name='stats')
     parent = models.ForeignKey('self', related_name='children', null=True)
     kind = models.ForeignKey('self', related_name='kind_children', null=True)
     list_order = models.PositiveIntegerField(default=0, db_index=True)
@@ -181,13 +181,13 @@ class AbstractStatTag(models.Model):
 
 
 class AbstractPersonaStat(WithDotValue):
-    persona = models.ForeignKey('AbstractPersona', related_name='stats')
-    stat = models.ForeignKey('AbstractStat', related_name='persona_stats')
-    tags = models.ManyToManyField('AbstractStatTag', related_name='persona_stats')
+    #persona = models.ForeignKey('AbstractPersona', related_name='stats')
+    #stat = models.ForeignKey('AbstractStat', related_name='persona_stats')
+    #tags = models.ManyToManyField('AbstractStatTag', related_name='persona_stats')
 
     class Meta:
         abstract = True
-        unique_together = (('persona', 'stat'),)
+        #unique_together = (('persona', 'stat'),)
 
 
 class AbstractMerit(models.Model):
@@ -203,14 +203,13 @@ class AbstractMerit(models.Model):
 
 
 class AbstractPersonaMerit(WithDotValue):
-    merit = models.ForeignKey('AbstractMerit', related_name='persona_merits')
-    persona = models.ForeignKey('AbstractPersona', related_name='merits')
+    #merit = models.ForeignKey('AbstractMerit', related_name='persona_merits')
+    #persona = models.ForeignKey('AbstractPersona', related_name='merits')
     key = CapitalCharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
     notes = models.TextField(blank=True)
 
-    class Meta:
-        unique_together = (('persona', 'key'))
+    #unique_together = (('persona', 'key'))
 
 class AbstractPool(models.Model):
     key = CapitalCharField(max_length=255, db_index=True, unique=True)
@@ -220,8 +219,8 @@ class AbstractPool(models.Model):
 
 
 class AbstractPersonaPool(models.Model):
-    persona = models.ForeignKey('AbstractPersona', related_name='pools')
-    pool = models.ForeignKey('AbstractPool', related_name='persona_pools')
+    #persona = models.ForeignKey('AbstractPersona', related_name='pools')
+    #pool = models.ForeignKey('AbstractPool', related_name='persona_pools')
     points = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -229,7 +228,7 @@ class AbstractPersonaPool(models.Model):
 
 class AbstractPersonaCommit(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
-    pool = models.ForeignKey('AbstractPersonaPool', related_name='commitments')
+    #pool = models.ForeignKey('AbstractPersonaPool', related_name='commitments')
     value = models.PositiveIntegerField(default=0)
 
     def __str__(self):

@@ -3,96 +3,144 @@ from evennia.utils.ansi import ANSIString
 
 # And finally, the Stats for Exalted 3rd Edition.
 
-STATS = {
-    # attributes!
-    'strength': {
-        'name': 'Strength',
-        'kind': 'attribute',
-        'category': 'Physical',
+STAT_TAGS = (
+    {
+        'id': 1,
+        'key': 'Dot',
+    },{
+        'id': 2,
+        'key': 'Roll',
+    },{
+        'id': 3,
+        'key': 'Favored',
+    },{
+        'id': 4,
+        'key': 'Supernal',
+    },{
+        'id': 5,
+        'key': 'Caste',
+    },{
+        'id': 6,
+        'key': 'Specialty',
+    },
+)
+
+STAT_PARENTS = (
+    {
+        'id': 1,
+        'key': 'Attribute',
         'list_order': 1,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-    },
-    'dexterity': {
-        'name': 'Dexterity',
-        'kind': 'attribute',
-        'category': 'Physical',
+        'features_add': (1, 2, 3,)
+    },{
+        'id': 2,
+        'key': 'Physical',
+        'list_order': 1,
+        'start_rating': 1,
+        'features_add': ()
+    },{
+        'id': 3,
+        'key': 'Social',
         'list_order': 2,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-    },
-    'stamina': {
-        'name': 'Stamina',
-        'kind': 'attribute',
-        'category': 'Physical',
+        'features_add': ()
+    },{
+        'id': 4,
+        'key': 'Mental',
         'list_order': 3,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'charisma': {
-        'name': 'Charisma',
-        'kind': 'attribute',
-        'category': 'Social',
+        'features_add': ()
+    },{
+        'id': 5,
+        'key': 'Ability',
+        'list_order': 2,
+        'start_rating': 1,
+        'features_add': (1, 2, 3,)
+    },{
+        'id': 6,
+        'key': 'Advantage',
+        'list_order': 3,
+        'start_rating': 1,
+        'features_add': (1, 2, 3,)
+    },{
+        'id': 7,
+        'key': 'Style',
         'list_order': 4,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
+        'features_add': (1, 2, 3,)
     },
-    'manipulation': {
-        'name': 'Manipulation',
-        'kind': 'attribute',
-        'category': 'Social',
+
+)
+
+STAT_DATA = (
+    {
+        'id': 100,
+        'key': 'Strength',
+        'parent': 1,
+        'kind': 2,
+        'start_rating': 1,
+        'list_order': 1,
+    },{
+        'id': 101,
+        'key': 'Dexterity',
+        'parent': 1,
+        'kind': 2,
+        'start_rating': 1,
+        'list_order': 2,
+    },{
+        'id': 102,
+        'key': 'Stamina',
+        'parent': 1,
+        'kind': 2,
+        'start_rating': 1,
+        'list_order': 3,
+    },{
+        'id': 103,
+        'key': 'Charisma',
+        'parent': 1,
+        'kind': 3,
+        'start_rating': 1,
+        'list_order': 4,
+    },{
+        'id': 105,
+        'key': 'Manipulation',
+        'parent': 1,
+        'kind': 3,
+        'start_rating': 1,
         'list_order': 5,
+    },{
+        'id': 106,
+        'key': 'Appearance',
+        'parent': 1,
+        'kind': 3,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'appearance': {
-        'name': 'Appearance',
-        'kind': 'attribute',
-        'category': 'Social',
         'list_order': 6,
+    },{
+        'id': 107,
+        'key': 'Perception',
+        'parent': 1,
+        'kind': 4,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'perception': {
-        'name': 'Perception',
-        'kind': 'attribute',
-        'category': 'Mental',
         'list_order': 7,
+    },{
+        'id': 108,
+        'key': 'Intelligence',
+        'parent': 1,
+        'kind': 4,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'intelligence': {
-        'name': 'Intelligence',
-        'kind': 'attribute',
-        'category': 'Mental',
         'list_order': 8,
+    },{
+        'id': 109,
+        'key': 'Wits',
+        'parent': 1,
+        'kind': 4,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'wits': {
-        'name': 'Wits',
-        'kind': 'attribute',
-        'category': 'Mental',
         'list_order': 9,
-        'start_rating': 1,
-        'features_add': (),
-        'features_remove': (),
-
     },
+)
+
+STATS = {
+    # attributes!
 
     #Abilities!
     'archery': {

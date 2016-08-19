@@ -24,14 +24,22 @@ class Persona(AbstractPersona):
 class SheetColor(AbstractSheetColor):
     template = models.OneToOneField('Template', related_name='sheet_colors')
 
+    class Meta:
+        unique_together = (('template', 'key'),)
+
 
 class Trait(AbstractTrait):
     template = models.ForeignKey('Template', related_name='trait_choices')
+
+    class Meta:
+        unique_together = (('template', 'key'),)
 
 
 class TraitValue(AbstractTraitValue):
     trait = models.ForeignKey('Trait', related_name='values')
 
+    class Meta:
+        unique_together = (('trait', 'key'),)
 
 class PersonaTraitValue(AbstractPersonaTraitValue):
     value = models.ForeignKey('TraitValue', related_name='personas')
@@ -55,6 +63,8 @@ class PersonaStat(AbstractPersonaStat):
     stat = models.ForeignKey('Stat', related_name='persona_stats')
     tags = models.ManyToManyField('StatTag', related_name='persona_stats')
 
+    class Meta:
+        unique_together = (('persona', 'stat'),)
 
 class Merit(AbstractMerit):
     pass
@@ -64,6 +74,8 @@ class PersonaMerit(AbstractPersonaMerit):
     merit = models.ForeignKey('Merit', related_name='persona_merits')
     persona = models.ForeignKey('Persona', related_name='merits')
 
+    class Meta:
+        unique_together = (('persona', 'key'))
 
 class Pool(AbstractPool):
     pass
