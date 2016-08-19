@@ -5,10 +5,13 @@ from athanor.core.models import validate_color
 from django.utils.encoding import smart_text
 
 class CapitalCharField(models.CharField):
-    def value_to_string(self, obj):
-        clean_text = dramatic_capitalize(sanitize_string(obj, strip_ansi=True))
-        return smart_text(self.value_from_object(clean_text))
+    def to_python(self, obj):
+        return dramatic_capitalize(sanitize_string(obj, strip_ansi=True))
 
+    def get_prep_value(self, value):
+        value = super(CapitalCharField, self).get_prep_value(value)
+        return dramatic_capitalize(sanitize_string(value, strip_ansi=True,
+                                                   strip_newlines=True, strip_indents=True))
 
 class WithDotValue(models.Model):
     rating = models.PositiveSmallIntegerField(default=0, db_index=True)
@@ -55,6 +58,8 @@ class AbstractPersona(models.Model):
         abstract = True
         unique_together = (('key', 'character'),)
 
+    def __repr__(self):
+        return '<Persona: %s>' % self.key
 
 class AbstractTemplate(models.Model):
     key = CapitalCharField(max_length=255, db_index=True, unique=True)
@@ -62,6 +67,9 @@ class AbstractTemplate(models.Model):
     category1_name = models.CharField(max_length=255, default='Category1')
     category2_name = models.CharField(max_length=255, default='Category2')
     category3_name = models.CharField(max_length=255, default='Category3')
+
+    def __repr__(self):
+        return '<Template: %s>' % self.key
 
     class Meta:
         abstract = True
@@ -95,6 +103,9 @@ class AbstractCategory(models.Model):
     class Meta:
         abstract = True
 
+    def __repr__(self):
+        return '<Category: %s>' % self.key
+
 class AbstractSheetColor(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
     #template = models.OneToOneField('AbstractTemplate', related_name='sheet_colors')
@@ -123,6 +134,9 @@ class AbstractSheetColor(models.Model):
 class AbstractTrait(models.Model):
     key = CapitalCharField(max_length=255, db_index=True)
     #template = models.ForeignKey('AbstractTemplate', related_name='trait_choices')
+
+    def __repr__(self):
+        return '<Trait: %s>' % self.key
 
     class Meta:
         abstract = True
@@ -172,6 +186,8 @@ class AbstractStat(models.Model):
         abstract = True
         unique_together = (('key', 'parent'),)
 
+    def __repr__(self):
+        return '<Stat: %s>' % self.key
 
 class AbstractStatTag(models.Model):
     key = CapitalCharField(max_length=255, db_index=True, unique=True)
@@ -201,6 +217,8 @@ class AbstractMerit(models.Model):
         abstract = True
         unique_together = (('key', 'parent'))
 
+    def __repr__(self):
+        return '<Merit: %s>' % self.key
 
 class AbstractPersonaMerit(WithDotValue):
     #merit = models.ForeignKey('AbstractMerit', related_name='persona_merits')

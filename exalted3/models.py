@@ -48,6 +48,7 @@ class PersonaTraitValue(AbstractPersonaTraitValue):
 
 class Category(AbstractCategory):
     template = models.ForeignKey('Template', related_name='categories')
+    caste_stats = models.ManyToManyField('Stat', related_name='castes')
 
 
 class Stat(AbstractStat):

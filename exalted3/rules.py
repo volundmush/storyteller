@@ -25,54 +25,66 @@ STAT_TAGS = (
     },
 )
 
-STAT_PARENTS = (
+STAT_DATA = (
     {
         'id': 1,
         'key': 'Attribute',
         'list_order': 1,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
         'features_add': (1, 2, 3,)
     },{
         'id': 2,
         'key': 'Physical',
         'list_order': 1,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
         'features_add': ()
     },{
         'id': 3,
         'key': 'Social',
         'list_order': 2,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
         'features_add': ()
     },{
         'id': 4,
         'key': 'Mental',
         'list_order': 3,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
         'features_add': ()
     },{
         'id': 5,
         'key': 'Ability',
         'list_order': 2,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
-        'features_add': (1, 2, 3,)
+        'features_add': (1, 2, 3, 4, 5, 6)
     },{
         'id': 6,
         'key': 'Advantage',
         'list_order': 3,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
-        'features_add': (1, 2, 3,)
+        'features_add': (1, 2, )
     },{
         'id': 7,
         'key': 'Style',
         'list_order': 4,
+        'parent': None,
+        'kind': None,
         'start_rating': 1,
-        'features_add': (1, 2, 3,)
+        'features_add': (1, 2, 6)
     },
 
-)
-
-STAT_DATA = (
+    # Attributes
     {
         'id': 100,
         'key': 'Strength',
@@ -137,306 +149,212 @@ STAT_DATA = (
         'start_rating': 1,
         'list_order': 9,
     },
-)
 
-STATS = {
-    # attributes!
-
-    #Abilities!
-    'archery': {
-        'name': 'Archery',
-        'kind': 'ability',
-        'category': 'Ability',
+    # Abilities
+    {
+        'id': 200,
+        'key': 'Archery',
+        'parent': 5,
+        'kind': None,
+        'start_rating': 0,
         'list_order': 10,
+    },{
+        'id': 201,
+        'key': 'Brawl',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'brawl': {
-        'name': 'Brawl',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 15,
+    },{
+        'id': 202,
+        'key': 'Melee',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'melee': {
-        'name': 'Melee',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 20,
+    },{
+        'id': 203,
+        'key': 'War',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'war': {
-        'name': 'War',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 25,
+    },{
+        'id': 204,
+        'key': 'Thrown',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'thrown': {
-        'name': 'Thrown',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 30,
+    },{
+        'id': 205,
+        'key': 'Bureaucracy',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'bureaucracy': {
-        'name': 'Bureaucracy',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 35,
+    },{
+        'id': 206,
+        'key': 'Linguistics',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'linguistics': {
-        'name': 'Linguistics',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 40,
+    },{
+        'id': 207,
+        'key': 'Ride',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'ride': {
-        'name': 'Ride',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 45,
+    },{
+        'id': 208,
+        'key': 'Sail',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'sail': {
-        'name': 'Sail',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 50,
+    },{
+        'id': 209,
+        'key': 'Socialize',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'socialize': {
-        'name': 'Socialize',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 55,
+    },{
+        'id': 210,
+        'key': 'Athletics',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'athletics': {
-        'name': 'Athletics',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 60,
+    },{
+        'id': 211,
+        'key': 'Awareness',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'awareness': {
-        'name': 'Awareness',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 65,
+    },{
+        'id': 212,
+        'key': 'Dodge',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'dodge': {
-        'name': 'Dodge',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 70,
+    },{
+        'id': 213,
+        'key': 'Larceny',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'larceny': {
-        'name': 'Larceny',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 75,
+    },{
+        'id': 214,
+        'key': 'Stealth',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'stealth': {
-        'name': 'Stealth',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 80,
+    },{
+        'id': 215,
+        'key': 'Craft',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'craft': {
-        'name': 'Craft',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 85,
+        'features_remove': (1,)
+    },{
+        'id': 216,
+        'key': 'Investigation',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': ('dot', 'roll')
-    },
-    'investigation': {
-        'name': 'Investigation',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 90,
+    },{
+        'id': 217,
+        'key': 'Lore',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'lore': {
-        'name': 'Lore',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 95,
+    },{
+        'id': 218,
+        'key': 'Medicine',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'medicine': {
-        'name': 'Medicine',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 100,
+    },{
+        'id': 219,
+        'key': 'Occult',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'occult': {
-        'name': 'Occult',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 105,
+    },{
+        'id': 220,
+        'key': 'Integrity',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'integrity': {
-        'name': 'Integrity',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 110,
+    },{
+        'id': 221,
+        'key': 'Performance',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'performance': {
-        'name': 'Performance',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 115,
+    },{
+        'id': 222,
+        'key': 'Presence',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'presence': {
-        'name': 'Presence',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 120,
+    },{
+        'id': 223,
+        'key': 'Resistance',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'resistance': {
-        'name': 'Resistance',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 125,
+    },{
+        'id': 224,
+        'key': 'Survival',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'survival': {
-        'name': 'Survival',
-        'kind': 'ability',
-        'category': 'Ability',
         'list_order': 130,
+    },{
+        'id': 225,
+        'key': 'Martial Arts',
+        'parent': 5,
+        'kind': None,
         'start_rating': 0,
-        'features_add': (),
-        'features_remove': (),
-
-    },
-    'martial_arts': {
-        'name': 'Martial Arts',
-        'kind': 'ability',
-        'category': 'Ability',
-        'list_order': 13,
-        'start_rating': 0,
-        'features_add': (),
-        'features_remove': ('dot', 'roll', 'favor', 'caste')
+        'list_order': 135,
+        'features_remove': (1, 2, 3, 5,)
     },
 
     # Advantages
-    'essence': {
-        'name': 'Essence',
-        'category': 'Advantage',
-        'kind': 'advantage',
-        'list_order': 5,
+    {
+        'id': 300,
+        'key': 'Essence',
+        'parent': 6,
+        'kind': None,
         'start_rating': 1,
-        'features_add': (),
-        'features_remove': ('favor', 'supernal', 'caste', 'special'),
-    },
-    'willpower': {
-        'name': 'Willpower',
-        'kind': 'advantage',
-        'category': 'Ability',
-        'list_order': 5,
+        'list_order': 200,
+    },{
+        'id': 301,
+        'key': 'Willpower',
+        'parent': 6,
+        'kind': None,
         'start_rating': 5,
-        'features_add': (),
-        'features_remove': ('favor', 'supernal', 'caste', 'special'),
-    }
+        'list_order': 201,
+    },
+)
 
-}
-
-
-CUSTOM = {
-    'craft': {
-            'kind': 'craft',
-            'category': 'Craft',
-            'features_default': ('dot', 'roll', 'special')
-        },
-        'style': {
-            'kind': 'style',
-            'category': 'Style',
-            'features_default': ('dot', 'roll', 'special')
-        }
-}
 
 MERITS = {
     'merit': {
@@ -705,14 +623,4 @@ EXPERIENCE = {
         'name': 'White XP',
         'list_order': 40
     }
-}
-
-EX3_RULES = {
-    'stats': STATS,
-    'powers': POWERS,
-    'merits': MERITS,
-    'custom': CUSTOM,
-    'pools': POOLS,
-    'templates': TEMPLATES,
-    'experience': EXPERIENCE
 }
