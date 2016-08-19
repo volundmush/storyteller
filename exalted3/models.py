@@ -15,31 +15,35 @@ class Template(AbstractTemplate):
 
 
 class Persona(AbstractPersona):
-    pass
+    template = models.ForeignKey('Template', related_name='personas')
+    category1 = models.ForeignKey('Category', related_name='personas_1', null=True)
+    category2 = models.ForeignKey('Category', related_name='personas_2', null=True)
+    category3 = models.ForeignKey('Category', related_name='personas_3', null=True)
 
 
 class SheetColor(AbstractSheetColor):
-    pass
+    template = models.OneToOneField('Template', related_name='sheet_colors')
 
 
 class Trait(AbstractTrait):
-    pass
+    template = models.ForeignKey('Template', related_name='trait_choices')
 
 
 class TraitValue(AbstractTraitValue):
-    pass
+    trait = models.ForeignKey('Trait', related_name='values')
 
 
 class PersonaTraitValue(AbstractPersonaTraitValue):
-    pass
+    value = models.ForeignKey('TraitValue', related_name='personas')
+    persona = models.ForeignKey('Persona', related_name='traits')
 
 
 class Category(AbstractCategory):
-    pass
+    template = models.ForeignKey('Template', related_name='categories')
 
 
 class Stat(AbstractStat):
-    pass
+    features = models.ManyToManyField('StatTag', related_name='stats')
 
 
 class StatTag(AbstractStatTag):
@@ -47,7 +51,9 @@ class StatTag(AbstractStatTag):
 
 
 class PersonaStat(AbstractPersonaStat):
-    pass
+    persona = models.ForeignKey('Persona', related_name='stats')
+    stat = models.ForeignKey('Stat', related_name='persona_stats')
+    tags = models.ManyToManyField('StatTag', related_name='persona_stats')
 
 
 class Merit(AbstractMerit):
@@ -55,7 +61,8 @@ class Merit(AbstractMerit):
 
 
 class PersonaMerit(AbstractPersonaMerit):
-    pass
+    merit = models.ForeignKey('Merit', related_name='persona_merits')
+    persona = models.ForeignKey('Persona', related_name='merits')
 
 
 class Pool(AbstractPool):
@@ -63,11 +70,12 @@ class Pool(AbstractPool):
 
 
 class PersonaPool(AbstractPersonaPool):
-    pass
+    persona = models.ForeignKey('Persona', related_name='pools')
+    pool = models.ForeignKey('Pool', related_name='persona_pools')
 
 
 class PersonaCommit(AbstractPersonaCommit):
-    pass
+    pool = models.ForeignKey('PersonaPool', related_name='commitments')
 
 
 """
