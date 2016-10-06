@@ -81,7 +81,15 @@ STAT_DATA = (
         'parent': None,
         'kind': None,
         'start_rating': 1,
-        'features_add': (1, 2, 6)
+        'features_add': (1, 2)
+    },{
+        'id': 8,
+        'key': 'Specialty',
+        'list_order': 4,
+        'parent': None,
+        'kind': None,
+        'start_rating': 1,
+        'features_add': (1, 2)
     },
 
     # Attributes
@@ -114,35 +122,35 @@ STAT_DATA = (
         'start_rating': 1,
         'list_order': 4,
     },{
-        'id': 105,
+        'id': 104,
         'key': 'Manipulation',
         'parent': 1,
         'kind': 3,
         'start_rating': 1,
         'list_order': 5,
     },{
-        'id': 106,
+        'id': 105,
         'key': 'Appearance',
         'parent': 1,
         'kind': 3,
         'start_rating': 1,
         'list_order': 6,
     },{
-        'id': 107,
+        'id': 106,
         'key': 'Perception',
         'parent': 1,
         'kind': 4,
         'start_rating': 1,
         'list_order': 7,
     },{
-        'id': 108,
+        'id': 107,
         'key': 'Intelligence',
         'parent': 1,
         'kind': 4,
         'start_rating': 1,
         'list_order': 8,
     },{
-        'id': 109,
+        'id': 108,
         'key': 'Wits',
         'parent': 1,
         'kind': 4,
@@ -353,6 +361,90 @@ STAT_DATA = (
         'start_rating': 5,
         'list_order': 201,
     },
+
+    # Martial Arts Styles
+    {
+        'id': 400,
+        'key': 'Snake',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 401,
+        'key': 'Tiger',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 402,
+        'key': 'Single Point Shining into the Void',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 403,
+        'key': 'White Reaper',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 404,
+        'key': 'Ebon Shadow',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 405,
+        'key': 'Crane',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 406,
+        'key': 'Silver-Voiced Nightingale',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 407,
+        'key': 'Righteous Devil',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 408,
+        'key': 'Black Claw',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },{
+        'id': 409,
+        'key': 'Steel Devil',
+        'parent': 8,
+        'kind': None,
+        'start_rating': 0,
+        'list_order': 0,
+        'features_add': (1, 2),
+    },
+
 )
 
 
@@ -496,41 +588,162 @@ def liminal_limit(handler):
     return 10
 
 
-TEMPLATES = {
-    'mortal': {
-        'name': 'Mortal',
-        'list_order': 0,
-        'pools': {'willpower': universal_willpower},
-        'charm_type': None,
-        'info_defaults': {},
-        'info_choices': {},
-        'extra_sheet_colors': {},
-        'sheet_column_1': (),
-        'sheet_column_2': (),
-        'sheet_footer': 'Mortals: The Heroes'
+CATEGORY = {
+    'Solar': (
+    {
+        'id': 1,
+        'key': 'Dawn',
+        'caste_stats': (200, 211, 201, 212, 202, 223, 204, 203),
+        'list_order': 1
+    },{
+        'id': 2,
+        'key': 'Zenith',
+        'caste_stats': (210, 220, 221, 217, 222, 223, 224, 203),
+        'list_order': 2
+    },{
+        'id': 3,
+        'key': 'Twilight',
+        'caste_stats': (205, 215, 220, 216, 206, 217, 218, 219),
+        'list_order': 3
+    },{
+        'id': 4,
+        'key': 'Night',
+        'caste_stats': (210, 211, 212, 216, 213, 207, 214, 209),
+        'list_order': 4
+    },{
+        'id': 5,
+        'key': 'Eclipse',
+        'caste_stats': (205, 213, 206, 219, 222, 207, 208, 209),
+        'list_order': 5
     },
-    'solar': {
-        'name': 'Solar',
-        'list_order': 5,
-        'pools': {'personal': solar_personal, 'peripheral': solar_peripheral, 'willpower': universal_willpower,
+    ),
+    'Abyssal': (
+    {
+        'id': 6,
+        'key': 'Dusk',
+        'caste_stats': (200, 211, 201, 212, 202, 223, 204, 203),
+        'list_order': 1
+    },{
+        'id': 7,
+        'key': 'Midnight',
+        'caste_stats': (210, 220, 221, 217, 222, 223, 224, 203),
+        'list_order': 2
+    },{
+        'id': 8,
+        'key': 'Daybreak',
+        'caste_stats': (205, 215, 220, 216, 206, 217, 218, 219),
+        'list_order': 3
+    },{
+        'id': 9,
+        'key': 'Day',
+        'caste_stats': (210, 211, 212, 216, 213, 207, 214, 209),
+        'list_order': 4
+    },{
+        'id': 10,
+        'key': 'Moonshadow',
+        'caste_stats': (205, 213, 206, 219, 222, 207, 208, 209),
+        'list_order': 5
+    },
+    )
+
+}
+
+
+"""
+    # Lunar Castes
+    {
+        'id': 11,
+        'key': 'Full Moon',
+        'caste_abilities': (100, 101, 102)
+    },{
+        'id': 12,
+        'key': 'Changing Moon',
+        'caste_abilities': (103, 104, 105)
+    },{
+        'id': 13,
+        'key': 'No Moon',
+        'caste_abilities': (106, 107, 108)
+    },
+
+    # First Age Lunar Castes
+    {
+        'id': 14,
+        'key': 'Waxing Moon',
+        'caste_abilities': (103, 104, 105)
+    },{
+        'id': 15,
+        'key': 'Waning Moon',
+        'caste_abilities': (101, 105, 109)
+    },{
+        'id': 16,
+        'key': 'Half Moon',
+        'caste_abilities': (103, 107, 108)
+    },
+
+"""
+
+
+POOL_DATA = {
+    'Mortal': {'willpower': universal_willpower},
+    'Solar': {'personal': solar_personal, 'peripheral': solar_peripheral, 'willpower': universal_willpower,
                   'limit': solar_limit},
-        'charm_type': 'solar_charm',
-        'info_defaults': {'Caste': None},
-        'info_choices': {'Caste': ('Dawn', 'Zenith', 'Eclipse', 'Twilight', 'Night')},
-        'extra_sheet_colors': {'border': 'Y', 'slash': 'r', 'section_name': 'y'},
-        'sheet_column_1': ('Caste',),
-        'sheet_column_2': (),
-        'sheet_footer': ANSIString('{ySolars: The Lawgivers{n')
+    'Abyssal': {'personal': abyssal_personal, 'peripheral': abyssal_peripheral, 'willpower': universal_willpower,
+                  'resonance': abyssal_resonance},
+    'Lunar': {'personal': lunar_personal, 'peripheral': lunar_peripheral, 'willpower': universal_willpower,
+                  'limit': lunar_limit},
+    'Terrestrial': {'personal': terrestrial_personal, 'peripheral': terrestrial_peripheral,
+                  'willpower': universal_willpower, 'limit': terrestrial_limit},
+    'Sidereal': {'personal': sidereal_personal, 'peripheral': sidereal_peripheral, 'willpower': universal_willpower,
+                  'limit': sidereal_limit},
+    'Liminal': {'personal': liminal_personal, 'peripheral': liminal_peripheral, 'willpower': universal_willpower,
+                  'limit': liminal_limit},
+
+}
+
+TEMPLATES = {
+    # Mortal
+    1: {'sheet_footer': 'Mortals: The Heroes',
     },
+
+    # Solar
+    2: {'sheet_footer': ANSIString('{ySolars: The Lawgivers{n')
+    },
+
+    # Abyssal
+}
+
+
+TEMPLATE_DATA = (
+    {
+        'id': 1,
+        'key': 'Mortal',
+        'category1_name': 'Profession',
+    },{
+        'id': 2,
+        'key': 'Solar',
+        'categories': CATEGORY['Solar'],
+        'extra_sheet_colors': {'border': 'Y', 'slash': 'r', 'section_name': 'y'},
+        'list_order': 5,
+        'category1_name': 'Caste',
+    },
+)
+"""
+    {
+        'id': 3,
+        'key': 'Abyssal',
+        'categories': (6, 7, 8, 9, 10),
+        'extra_sheet_colors': {'border': 'X', 'slash': 'R', 'section_name': 'r'},
+        'list_order': 10,
+    },
+)
+
     'abyssal': {
         'name': 'Abyssal',
         'list_order': 10,
-        'pools': {'personal': abyssal_personal, 'peripheral': abyssal_peripheral, 'willpower': universal_willpower,
-                  'resonance': abyssal_resonance},
         'charm_type': 'abyssal_charm',
         'info_defaults': {'Caste': None},
         'info_choices': {'Caste': ('Dusk', 'Midnight', 'Moonshadow', 'Daybreak', 'Day')},
-        'extra_sheet_colors': {'border': 'Y', 'slash': 'r', 'section_name': 'y'},
+        'extra_sheet_colors':
         'sheet_column_1': ('Caste',),
         'sheet_column_2': (),
         'sheet_footer': ANSIString('{rAbyssals: The Deathknights{n')
@@ -538,8 +751,7 @@ TEMPLATES = {
     'lunar': {
         'name': 'Lunar',
         'list_order': 15,
-        'pools': {'personal': lunar_personal, 'peripheral': lunar_peripheral, 'willpower': universal_willpower,
-                  'limit': lunar_limit},
+        'pools':
         'charm_type': 'lunar_charm',
         'info_defaults': {'Caste': None},
         'info_choices': {'Caste': ('Full Moon', 'Changing Moon', 'No Moon')},
@@ -551,8 +763,6 @@ TEMPLATES = {
     'terrestrial': {
         'name': 'Terrestrial',
         'list_order': 20,
-        'pools': {'personal': terrestrial_personal, 'peripheral': terrestrial_peripheral,
-                  'willpower': universal_willpower, 'limit': terrestrial_limit},
         'charm_type': 'terrestrial_charm',
         'info_defaults': {'Aspect': None},
         'info_choices': {'Aspect': ('Fire', 'Air', 'Water', 'Wood', 'Earth')},
@@ -564,8 +774,6 @@ TEMPLATES = {
     'sidereal': {
         'name': 'Sidereal',
         'list_order': 25,
-        'pools': {'personal': sidereal_personal, 'peripheral': sidereal_peripheral, 'willpower': universal_willpower,
-                  'limit': sidereal_limit},
         'charm_type': 'sidereal_charm',
         'info_defaults': {'Caste': None},
         'info_choices': {'Caste': ('Journeys', 'Battles', 'Serenity', 'Secrets', 'Endings')},
@@ -577,8 +785,7 @@ TEMPLATES = {
     'liminimal': {
         'name': 'Liminal',
         'list_order': 30,
-        'pools': {'personal': liminal_personal, 'peripheral': liminal_peripheral, 'willpower': universal_willpower,
-                  'limit': liminal_limit},
+        'pools':
         'charm_type': 'liminal_charm',
         'info_defaults': {'Aspect': None},
         'info_choices': {'Aspect': ('Blood', 'Breath', 'Flesh', 'Marrow', 'Soil')},
@@ -624,3 +831,4 @@ EXPERIENCE = {
         'list_order': 40
     }
 }
+"""

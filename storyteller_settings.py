@@ -2,7 +2,7 @@
 
 from athanor.athanor_settings import *
 
-INSTALLED_APPS = INSTALLED_APPS + ('storyteller.abstract.apps.StorytellerConfig',)
+#INSTALLED_APPS = INSTALLED_APPS + ('storyteller.abstract.apps.StorytellerConfig',)
 
 # EXALTED 2
 
