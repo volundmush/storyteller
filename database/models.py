@@ -1,12 +1,7 @@
 from django.db import models
 from evennia.utils.ansi import ANSIString
-from athanor.library import dramatic_capitalize, sanitize_string
-from athanor.core.models import validate_color
-from django.utils.encoding import smart_text
-
-def prepare_key(value):
-    return dramatic_capitalize(sanitize_string(value, strip_ansi=True, strip_indents=True,
-                                               strip_newlines=True))
+from athanor.core.models import WithKey
+from athanor.utils.text import dramatic_capitalize, sanitize_string
 
 class WithDotValue(models.Model):
     rating = models.PositiveSmallIntegerField(default=0, db_index=True)
@@ -40,15 +35,22 @@ class WithDotValue(models.Model):
         return final_display + fill + dot_display
 
 
-class AbstractCharacter(models.Model):
-    game = models.PositiveSmallIntegerField(default=0)
+class Game(WithKey):
+    pass
+
+
+class Persona(models.Model):
+    game = models.ForeignKey('storyteller.Game', related_name='personas')
     key = models.CharField(max_length=255, db_index=True)
+    parent = models.ForeignKey('storyteller.Persona', null=True, default=None, related_name='children')
     character = models.ForeignKey('objects.ObjectDB', related_name='personas')
-    template = models.PositiveSmallIntegerField(default=0)
+    template = models.PositiveSmallIntegerField(default=1)
+    x_splat = models.PositiveIntegerField(default=1)
+    y_splat = models.PositiveIntegerField(null=True)
+    z_splat = models.PositiveIntegerField(null=True)
 
     class Meta:
-        abstract = True
-        unique_together = (('game', 'key', 'character'),)
+        unique_together = (('key', 'character'),)
 
     def __repr__(self):
         return '<Persona: %s>' % self.key
@@ -57,87 +59,68 @@ class AbstractCharacter(models.Model):
         return self.key
 
 
+class Trait(models.Model):
+    persona = models.ForeignKey('storyteller.Persona', related_name='traits')
+    trait_id = models.PositiveIntegerField(default=0)
+    answer = models.ForeignKey('storyteller.TraitAnswer', related_name='trait_characters')
+
+    class Meta:
+        unique_together = (('trait_id', 'persona'),)
+
+
+class TraitAnswer(WithKey):
+    pass
+
+
+class Stat(WithDotValue):
+    persona = models.ForeignKey('storyteller.Persona', related_name='stats')
+    stat_id = models.PositiveIntegerField(default=0, db_index=True)
+
+    class Meta:
+        unique_together = (('persona', 'stat_id',),)
 
 
 
-class AbstractStat(models.Model):
+class SpecialtyName(models.Model):
+    stat_id = models.PositiveIntegerField(default=0)
     key = models.CharField(max_length=255, db_index=True)
-    start_rating = models.PositiveSmallIntegerField(default=0, db_index=True, null=True)
-    #features = models.ManyToManyField('AbstractStatTag', related_name='stats')
-    parent = models.ForeignKey('self', related_name='children', null=True)
-    kind = models.ForeignKey('self', related_name='kind_children', null=True)
-    list_order = models.PositiveIntegerField(default=0, db_index=True)
-    custom = models.BooleanField(default=False)
 
     class Meta:
-        abstract = True
-        unique_together = (('key', 'parent'),)
+        unique_together = (('stat_id', 'key'),)
 
-    def __repr__(self):
-        return '<Stat: %s>' % self.key
 
-class AbstractStatTag(models.Model):
-    key = models.CharField(max_length=255, db_index=True, unique=True)
+class Specialty(WithDotValue):
+    persona = models.ForeignKey('storyteller.Persona', related_name='specialties')
+    specialty = models.ForeignKey('storyteller.SpecialtyName', related_name='users')
 
     class Meta:
-        abstract = True
+        unique_together = (('specialty', 'persona'),)
 
 
-class AbstractPersonaStat(WithDotValue):
-    #persona = models.ForeignKey('AbstractPersona', related_name='stats')
-    #stat = models.ForeignKey('AbstractStat', related_name='persona_stats')
-    #tags = models.ManyToManyField('AbstractStatTag', related_name='persona_stats')
+class Merit(models.Model):
+    persona = models.ForeignKey('storyteller.Persona', related_name='merits')
+    merit_id = models.PositiveIntegerField(default=0)
+    context = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
 
     class Meta:
-        abstract = True
-        #unique_together = (('persona', 'stat'),)
+        unique_together = (('persona', 'merit_id', 'context'),)
 
 
-class AbstractMerit(models.Model):
+class Pool(models.Model):
+    persona = models.ForeignKey('Persona', related_name='pools')
+    pool_id = models.PositiveSmallIntegerField(default=0)
+    spent = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = (('persona', 'pool_id'),)
+
+
+class PoolCommit(models.Model):
+    pool = models.ForeignKey('storyteller.Pool', related_name='commits')
     key = models.CharField(max_length=255, db_index=True)
-    parent = models.ForeignKey('self', related_name='children', null=True)
-    kind = models.ForeignKey('self', related_name='kind_children', null=True)
-    list_order = models.PositiveIntegerField(default=0, db_index=True)
-    custom = models.BooleanField(default=False)
-
-    class Meta:
-        abstract = True
-        unique_together = (('key', 'parent'))
-
-    def __repr__(self):
-        return '<Merit: %s>' % self.key
-
-class AbstractPersonaMerit(WithDotValue):
-    #merit = models.ForeignKey('AbstractMerit', related_name='persona_merits')
-    #persona = models.ForeignKey('AbstractPersona', related_name='merits')
-    key = models.CharField(max_length=255, db_index=True)
-    description = models.TextField(blank=True)
-    notes = models.TextField(blank=True)
-
-    #unique_together = (('persona', 'key'))
-
-class AbstractPool(models.Model):
-    key = models.CharField(max_length=255, db_index=True, unique=True)
-
-    class Meta:
-        abstract = True
-
-
-class AbstractPersonaPool(models.Model):
-    #persona = models.ForeignKey('AbstractPersona', related_name='pools')
-    #pool = models.ForeignKey('AbstractPool', related_name='persona_pools')
-    points = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        abstract = True
-
-class AbstractPersonaCommit(models.Model):
-    key = models.CharField(max_length=255, db_index=True)
-    #pool = models.ForeignKey('AbstractPersonaPool', related_name='commitments')
     value = models.PositiveIntegerField(default=0)
 
-    def __str__(self):
-        return self.key
-
     class Meta:
-        abstract = True
+        unique_together = (('pool', 'key'),)
