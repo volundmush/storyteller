@@ -1,17 +1,13 @@
 from __future__ import unicode_literals
 
-from storyteller.exalted3.rules.templates import TEMPLATE_MAP, CASTE_MAP
-#from storyteller.exalted3.rules.merits import MERIT_MAP
-from storyteller.exalted3.models import Stat
 
 class StatHandler(object):
     owner = None
 
     def __init__(self, owner):
         self.owner = owner
-        save_data, created = Stat.objects.get_or_create(persona=self.owner.persona)
-        self.save_data = save_data
-        self.stats_list = [stat(self.owner, save_data) for stat in self.owner.template.stat_list]
+        self.persona = owner.persona
+        self.stats_list = [stat(self.owner) for stat in self.owner.template.stat_list + self.owner.template.extra_stats]
         self.stats_dict = {stat.key: stat for stat in self.stats_list}
         self.stats_id = {stat.id: stat for stat in self.stats_list}
         self.category = dict()
@@ -23,11 +19,14 @@ class StatHandler(object):
         for category in ['Physical', 'Social', 'Mental']:
             self.attributes[category] = sorted([stat for stat in self.category['Attribute']
                                                 if stat.sub_category == category], key=lambda stat: stat.list_order)
+        self.skills = dict()
+        for category in ['Physical', 'Social', 'Mental']:
+            self.attributes[category] = sorted([stat for stat in self.category.get('Skill',())
+                                                if stat.sub_category == category], key=lambda stat: stat.list_order)
 
     def save(self):
         for stat in self.stats_list:
-            stat.save(no_update=True)
-        self.save_data.save()
+            stat.save()
 
 
 class PoolHandler(object):
@@ -46,6 +45,7 @@ class PoolHandler(object):
         for pool in self.pool_list:
             pool.save()
 
+
 class MeritHandler(object):
     owner = None
 
@@ -59,7 +59,7 @@ class MeritHandler(object):
     def load(self):
         saved = self.owner.persona.merits.all()
         for entry in saved:
-            new_merit = MERIT_MAP[saved.merit_id](self.owner, entry)
+            new_merit = self.owner.merit_map[saved.merit_id](self.owner, entry)
             self.merits_list.append(new_merit)
             self.merits_dict.get(new_merit.category, list()).append(new_merit)
 
@@ -69,34 +69,39 @@ class MeritHandler(object):
             merit.save()
 
 
-class Ex3Handler(object):
+class StorytellerHandler(object):
     owner = None
     template = None
     stats = None
     persona = None
     merits = None
+    game = None
+    pool_map = None
+    template_map = None
+    merit_map = None
+    game_id = 0
+    persona_stor = 'persona'
 
     def __init__(self, owner):
         self.owner = owner
         self.load()
 
     def load(self):
-        if self.owner.db.ex3_persona:
-            self.persona = self.owner.db.ex3_persona
-        else:
-            persona, created = self.owner.ex3_personas.get_or_create(key=self.owner.key)
-            self.persona = persona
-        self.template = TEMPLATE_MAP[self.persona.template](self)
-        self.caste = CASTE_MAP[self.persona.caste](self)
+        persona = self.owner.db.get(self.persona_stor, None)
+        if not persona:
+            persona, created = self.owner.personas.get_or_create(key=self.owner.key, game_id=self.game_id)
+            self.owner.db.set(self.persona_stor, persona)
+        self.template = self.template_map[self.persona.template](self)
         self.stats = StatHandler(self)
         #self.merits = MeritHandler(self)
         self.pools = PoolHandler(self)
 
     def save(self):
+        self.template.save()
         self.persona.save()
         self.stats.save()
         #self.merits.save()
         self.pools.save()
 
     def __repr__(self):
-        return '<Ex3Handler: %s>' % self.owner
+        return '<%s: %s>' % (self.__class__.__name__, self.owner)

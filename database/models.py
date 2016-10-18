@@ -35,17 +35,13 @@ class WithDotValue(models.Model):
         return final_display + fill + dot_display
 
 
-class Game(WithKey):
-    pass
-
-
 class Persona(models.Model):
-    game = models.ForeignKey('storyteller.Game', related_name='personas')
+    game_id = models.PositiveSmallIntegerField(default=0)
     key = models.CharField(max_length=255, db_index=True)
     parent = models.ForeignKey('storyteller.Persona', null=True, default=None, related_name='children')
     character = models.ForeignKey('objects.ObjectDB', related_name='personas')
     template = models.PositiveSmallIntegerField(default=1)
-    x_splat = models.PositiveIntegerField(default=1)
+    x_splat = models.PositiveIntegerField(null=True)
     y_splat = models.PositiveIntegerField(null=True)
     z_splat = models.PositiveIntegerField(null=True)
 
@@ -111,7 +107,7 @@ class Merit(models.Model):
 class Pool(models.Model):
     persona = models.ForeignKey('Persona', related_name='pools')
     pool_id = models.PositiveSmallIntegerField(default=0)
-    spent = models.PositiveIntegerField(default=0)
+    points = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = (('persona', 'pool_id'),)

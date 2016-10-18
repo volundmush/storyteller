@@ -13,11 +13,12 @@ def clean_string(value):
 
 ALL_STATS = ALL_ABILITIES + ALL_ATTRIBUTES + ALL_ADVANTAGES + ALL_STYLES
 
-class Caste(object):
+
+class Splat(object):
     owner = None
     key = '<Unknown'
     id = 0
-    display = 'Caste'
+    display = 'Splat'
 
     def __str__(self):
         return self.key
