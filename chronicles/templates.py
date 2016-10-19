@@ -1,11 +1,13 @@
 from __future__ import unicode_literals
-from storyteller.base import Template as OldTemplate, Splat
+from storyteller.base import Template, Splat
 from storyteller.chronicles.stats import ALL_STATS, BloodPotency, Gnosis
 from storyteller.chronicles.stats import ALL_VAMPIRE, ALL_MAGE, ALL_DISCIPLINES
 from storyteller.chronicles.pools import Willpower, Mana, Vitae
 
 # TEMPLATES
-class Template(OldTemplate):
+
+
+class CoDTemplate(Template):
     stat_list = ALL_STATS
 
 
@@ -14,13 +16,26 @@ class Mortal(Template):
     key = 'Mortal'
     id = 1
     pool_list = (Willpower)
-    stat_list = ALL_STATS
-    extra_stats = ALL_DISCIPLINES
 
+    @property
+    def extra_stats(self):
+        if self.is_ghoul:
+            return ALL_DISCIPLINES
+        return ()
+
+    @property
+    def extra_pools(self):
+        if self.is_ghoul:
+            return (Vitae,)
+
+    @property
+    def is_ghoul(self):
+        return False
 
 # Vampire
 class Clan(Splat):
     pass
+
 
 class Daeva(Clan):
     key = 'Daeva'
@@ -81,7 +96,7 @@ class OrdoDracul(Covenant):
 VAMPIRE_Y = {1: CarthianMovement, 2: CircleoftheCrone, 3: Invictus, 4: LanceaetSanctum, 5: OrdoDracul}
 
 
-class Vampire(Template):
+class Vampire(CoDTemplate):
     key = 'Vampire'
     id = 2
     pool_list = (Willpower, Vitae)
@@ -172,7 +187,7 @@ class TheEleventhQuestion(Legacy):
 MAGE_Z = {1: TheEleventhQuestion, }
 
 
-class Mage(Template):
+class Mage(CoDTemplate):
     key = 'Mage'
     id = 4
     pool_list = (Willpower, Mana)

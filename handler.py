@@ -80,17 +80,25 @@ class StorytellerHandler(object):
     template_map = None
     merit_map = None
     game_id = 0
-    persona_stor = 'persona'
 
     def __init__(self, owner):
         self.owner = owner
         self.load()
 
     def load(self):
-        persona = self.owner.db.get(self.persona_stor, None)
+        persona = None
+        last_persona = self.owner.db.persona
+        if last_persona:
+            found_persona = self.owner.personas.filter(game_id=self.game_id, id=last_persona).first()
+            if not found_persona:
+                persona = None
+            else:
+                persona = found_persona
         if not persona:
-            persona, created = self.owner.personas.get_or_create(key=self.owner.key, game_id=self.game_id)
-            self.owner.db.set(self.persona_stor, persona)
+            self.persona, created = self.owner.personas.get_or_create(key=self.owner.key, game_id=self.game_id)
+            self.owner.db.persona = self.persona.id
+        else:
+            self.persona = persona
         self.template = self.template_map[self.persona.template](self)
         self.stats = StatHandler(self)
         #self.merits = MeritHandler(self)

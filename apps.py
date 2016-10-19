@@ -1,8 +1,8 @@
 from django.apps import AppConfig
 
 
-class StorytellerConfig(AppConfig):
-    name = 'storyteller.abstract'
+class Storyteller(AppConfig):
+    name = 'storyteller'
 
     def ready(self):
         pass

@@ -33,6 +33,7 @@ class Stat(object):
         self.model, created = self.owner.persona.stats.get_or_create(stat_id=self.id)
         if created:
             self.value_storage = self.default
+            self.save()
         else:
             self.value_storage = self.model.rating
 
@@ -156,7 +157,7 @@ class Template(object):
                 continue
             splat_id = getattr(persona, '%s_splat' % splat_type)
             if not splat_id:
-                default = getattr(self, '%s_default')
+                default = getattr(self, '%s_default' % splat_type)
                 if not default:
                     continue
                 else:
