@@ -4,74 +4,74 @@ from storyteller.base import MentalSkill, PowerStat, Willpower as OldWillpower, 
 
 # Advantages
 class BloodPotency(PowerStat):
-    key = 'Blood Potency'
+    name = 'Blood Potency'
 
 
 class PrimalUrge(PowerStat):
-    key = 'Primal Urge'
+    name = 'Primal Urge'
 
 
 class Gnosis(PowerStat):
-    key = 'Gnosis'
+    name = 'Gnosis'
 
 
 class Wyrd(PowerStat):
-    key = 'Wyrd'
+    name = 'Wyrd'
 
 
 # Attributes
 
 class Strength(PhysicalAttribute):
     id = 3
-    key = 'Strength'
+    name = 'Strength'
     list_order = 1
 
 
 class Dexterity(PhysicalAttribute):
     id = 4
-    key = 'Dexterity'
+    name = 'Dexterity'
     list_order = 2
 
 
 class Stamina(PhysicalAttribute):
     id = 5
-    key = 'Stamina'
+    name = 'Stamina'
     list_order = 3
 
 
 class Presence(SocialAttribute):
     id = 6
-    key = 'Presence'
+    name = 'Presence'
     list_order = 1
 
 
 class Manipulation(SocialAttribute):
     id = 7
-    key = 'Manipulation'
+    name = 'Manipulation'
     list_order = 2
 
 
 class Composure(SocialAttribute):
     id = 8
-    key = 'Composure'
+    name = 'Composure'
     list_order = 3
 
 
 class Intelligence(MentalAttribute):
     id = 9
-    key = 'Intelligence'
+    name = 'Intelligence'
     list_order = 1
 
 
 class Wits(MentalAttribute):
     id = 10
-    key = 'Wits'
+    name = 'Wits'
     list_order = 2
 
 
 class Resolve(MentalAttribute):
     id = 11
-    key = 'Resolve'
+    name = 'Resolve'
     list_order = 3
 
 ALL_ATTRIBUTES = (Strength, Stamina, Dexterity, Presence, Manipulation, Composure, Intelligence, Wits, Resolve)
@@ -81,49 +81,49 @@ ALL_ATTRIBUTES = (Strength, Stamina, Dexterity, Presence, Manipulation, Composur
 
 class Academics(MentalSkill):
     id = 12
-    key = 'Academics'
+    name = 'Academics'
     list_order = 0
 
 
 class Computer(MentalSkill):
     id = 13
-    key = 'Computer'
+    name = 'Computer'
     list_order = 5
 
 
 class Crafts(MentalSkill):
     id = 14
-    key = 'Crafts'
+    name = 'Crafts'
     list_order = 10
 
 
 class Investigation(MentalSkill):
     id = 15
-    key = 'Investigation'
+    name = 'Investigation'
     list_order = 15
 
 
 class Medicine(MentalSkill):
     id = 16
-    key = 'Medicine'
+    name = 'Medicine'
     list_order = 20
 
 
 class Occult(MentalSkill):
     id = 17
-    key = 'Occult'
+    name = 'Occult'
     list_order = 25
 
 
 class Politics(MentalSkill):
     id = 18
-    key = 'Politics'
+    name = 'Politics'
     list_order = 30
 
 
 class Science(MentalSkill):
     id = 19
-    key = 'Science'
+    name = 'Science'
     list_order = 35
 
 
@@ -132,49 +132,49 @@ MENTAL_SKILLS = (Academics, Computer, Crafts, Investigation, Medicine, Occult, P
 #Physical
 class Athletics(PhysicalSkill):
     id = 20
-    key = 'Athletics'
+    name = 'Athletics'
     list_order = 0
 
 
 class Brawl(PhysicalSkill):
     id = 21
-    key = 'Brawl'
+    name = 'Brawl'
     list_order = 5
 
 
 class Drive(PhysicalSkill):
     id = 22
-    key = 'Drive'
+    name = 'Drive'
     list_order = 10
 
 
 class Firearms(PhysicalSkill):
     id = 23
-    key = 'Firearms'
+    name = 'Firearms'
     list_order = 15
 
 
 class Larceny(PhysicalSkill):
     id = 24
-    key = 'Larceny'
+    name = 'Larceny'
     list_order = 20
 
 
 class Stealth(PhysicalSkill):
     id = 25
-    key = 'Stealth'
+    name = 'Stealth'
     list_order = 25
 
 
 class Survival(PhysicalSkill):
     id = 30
-    key = 'Survival'
+    name = 'Survival'
     list_order = 30
 
 
 class Weaponry(PhysicalSkill):
     id = 35
-    key = 'Weaponry'
+    name = 'Weaponry'
     list_order = 35
 
 
@@ -183,49 +183,49 @@ PHYSICAL_SKILLS = (Athletics, Brawl, Drive, Firearms, Larceny, Stealth, Survival
 # Social
 class AnimalKen(SocialSkill):
     id = 36
-    key = 'Animal Ken'
+    name = 'Animal Ken'
     list_order = 0
 
 
 class Empathy(SocialSkill):
     id = 37
-    key = 'Empathy'
+    name = 'Empathy'
     list_order = 5
 
 
 class Expression(SocialSkill):
     id = 38
-    key = 'Expression'
+    name = 'Expression'
     list_order = 10
 
 
 class Intimidation(SocialSkill):
     id = 39
-    key = 'Intimidation'
+    name = 'Intimidation'
     list_order = 15
 
 
 class Persuasion(SocialSkill):
     id = 40
-    key = 'Persuasion'
+    name = 'Persuasion'
     list_order = 20
 
 
 class Socialize(SocialSkill):
     id = 41
-    key = 'Socialize'
+    name = 'Socialize'
     list_order = 25
 
 
 class Streetwise(SocialSkill):
     id = 42
-    key = 'Streetwise'
+    name = 'Streetwise'
     list_order = 30
 
 
 class Subterfuge(SocialSkill):
     id = 43
-    key = 'Subterfuge'
+    name = 'Subterfuge'
     list_order = 35
 
 
@@ -245,61 +245,61 @@ class Discipline(Stat):
 
 
 class Animalism(Discipline):
-    key = 'Animalism'
+    name = 'Animalism'
     id = 1000
 
 
 class Auspex(Discipline):
-    key = 'Auspex'
+    name = 'Auspex'
     id = 1001
 
 class Celerity(Discipline):
-    key = 'Celerity'
+    name = 'Celerity'
     id = 1002
 
 
 class Dominate(Discipline):
-    key = 'Dominate'
+    name = 'Dominate'
     id = 1003
 
 
 class Majesty(Discipline):
-    key = 'Majesty'
+    name = 'Majesty'
     id = 1004
 
 
 class Nightmare(Discipline):
-    key = 'Nightmare'
+    name = 'Nightmare'
     id = 1005
 
 
 class Obfuscate(Discipline):
-    key = 'Obfuscate'
+    name = 'Obfuscate'
     id = 1006
 
 
 class Protean(Discipline):
-    key = 'Protean'
+    name = 'Protean'
     id = 1007
 
 
 class Resilience(Discipline):
-    key = 'Resilience'
+    name = 'Resilience'
     id = 1008
 
 
 class Vigor(Discipline):
-    key = 'Vigor'
+    name = 'Vigor'
     id = 1009
 
 
 class ThebanSorcery(Discipline):
-    key = 'ThebanSorcery'
+    name = 'ThebanSorcery'
     id = 1010
 
 
 class Cruac(Discipline):
-    key = 'Cruac'
+    name = 'Cruac'
     id = 1011
 
 
@@ -315,52 +315,52 @@ class Arcana(Stat):
 
 
 class Death(Arcana):
-    key = 'Death'
+    name = 'Death'
     id = 2000
 
 
 class Fate(Arcana):
-    key = 'Fate'
+    name = 'Fate'
     id = 2001
 
 
 class Forces(Arcana):
-    key = 'Forces'
+    name = 'Forces'
     id = 2002
 
 
 class Life(Arcana):
-    key = 'Life'
+    name = 'Life'
     id = 2003
 
 
 class Matter(Arcana):
-    key = 'Matter'
+    name = 'Matter'
     id = 2004
 
 
 class Mind(Arcana):
-    key = 'Mind'
+    name = 'Mind'
     id = 2005
 
 
 class Prime(Arcana):
-    key = 'Prime'
+    name = 'Prime'
     id = 2006
 
 
 class Space(Arcana):
-    key = 'Space'
+    name = 'Space'
     id = 2007
 
 
 class Spirit(Arcana):
-    key = 'Spirit'
+    name = 'Spirit'
     id = 2008
 
 
 class Time(Arcana):
-    key = 'Time'
+    name = 'Time'
     id = 2009
 
 ALL_ARCANA = (Death, Fate, Forces, Life, Matter, Mind, Prime, Space, Spirit, Time)
