@@ -1,7 +1,11 @@
 from __future__ import unicode_literals
 from storyteller.base import PhysicalAttribute, SocialAttribute, MentalAttribute, Stat
 from storyteller.base import PowerStat, Willpower as OldWillpower, CharacterStat, Template, Splat
-from storyteller.base import Pool, CharacterPool, WillpowerPool
+from storyteller.base import Pool, CharacterPool, WillpowerPool, Specialty, Merit
+from storyteller.models import Game
+from storyteller.exalted3.models import CharmSet
+
+from athanor.utils.text import dramatic_capitalize, sanitize_string, partial_match
 
 
 class CharacterCraft(CharacterStat):
@@ -230,6 +234,16 @@ ALL_ABILITIES = (Archery, Athletics, Awareness, Brawl, Bureaucracy, Craft, Dodge
 
 ALL_STATS = ALL_ATTRIBUTES + ALL_ABILITIES + ALL_ADVANTAGES
 
+
+# Merits
+class ExMerit(Merit):
+    pass
+
+
+class ExFlaw(ExMerit):
+    pass
+
+
 # Pools
 
 class SolarPersonal(Pool):
@@ -243,6 +257,69 @@ class SolarPeripheral(Pool):
 
 
 ALL_POOLS = (WillpowerPool, SolarPersonal, SolarPeripheral)
+
+# CHARMS AND POWERS
+
+class ExPower(object):
+
+    def __init__(self, powerset, model):
+        self.owner = powerset
+        self.model = model
+        self.name = model.key
+
+    def __str__(self):
+        return self.name
+
+class PowerSet(object):
+    use = ExPower
+
+    def __init__(self, owner, id, name):
+        self.owner = owner
+        self.id = id
+        self.name = name
+        self.model, created = CharmSet.objects.get_or_create(category_id=owner.category_id, sub_id=id)
+
+        self.charms = [self.use(self, mod) for mod in self.model.charms.all()]
+
+    def add(self, creator, name=None):
+        if not name:
+            raise ValueError("What should it be called?")
+
+
+class CharmManager(object):
+    category_id = 0
+    use = PowerSet
+    choice_init = {}
+
+    def __init__(self, data):
+        self.data = data
+        self.choices = list()
+        self.choices_dict = dict()
+        for k, v in self.choice_init.iteritems():
+            p = self.use(self, k, v)
+            self.choices.append(p)
+            self.choices_dict[p.id] = p
+
+    def __str__(self):
+        return self.name
+
+
+class SolarCharm(CharmManager):
+    category_id = 1
+    name = 'Solar'
+    choice_init = {1: 'Archery', 2: 'Athletics', 3: 'Awareness', 4: 'Brawl', 5: 'Bureaucracy', 6: 'Craft', 7: 'Dodge',
+                   8: 'Integrity', 9: 'Investigation', 10: 'Larceny', 11: 'Linguistics', 12: 'Lore', 13: 'Medicine',
+                   14: 'Melee', 15: 'Occult', 16: 'Performance', 17: 'Presence', 18: 'Resistance', 19: 'Ride',
+                   20: 'Sail', 21: 'Socialize', 22: 'Stealth', 23: 'Survival', 24: 'Thrown', 25: 'War'}
+
+
+class Sorcery(CharmManager):
+    category_id = 100
+    name = 'Sorcery'
+    choice_init = {1: 'Terrestrial', 2: 'Celestial', 3: 'Solar'}
+
+
+ALL_POWERSETS = (SolarCharm, Sorcery)
 
 # Splats
 # Mortal
@@ -314,6 +391,7 @@ class Mortal(Template):
     x_classes = (Warrior, Priest, Savant, Criminal, Broker)
     pool_classes = (WillpowerPool)
 
+
 class Solar(Template):
     id = 2
     name = 'Solar'
@@ -325,12 +403,75 @@ class Solar(Template):
 ALL_TEMPLATES = (Mortal, Solar)
 
 
+# GAME DATA
+
+class MeritData(object):
+    id = 0
+    name = 'Merits'
+    use = ExMerit
+
+    def __init__(self, data):
+        self.data = data
+        self.game = data.game
+        self.merits = [self.use(self.data, mod) for mod in self.game.merits.filter(category_id=self.id)]
+        self.merits_dict = {mer.id: mer for mer in self.merits}
+
+    def add(self, creator, name=None):
+        if not name:
+            raise ValueError("No name set!")
+        name = dramatic_capitalize(sanitize_string(name))
+        if self.game.merits.filter(category_id=self.id, key__iexact=name).count():
+            raise ValueError("This name is already in use!")
+        new_mod = self.game.merits.create(category_id=self.id, key=name, creator=creator)
+        new_mer = self.use(self.data, new_mod)
+        self.merits.append(new_mer)
+        self.merits_dict[new_mer.id] = new_mer
+
+
+class FlawData(MeritData):
+    id = 1
+    use = ExFlaw
+
+
+class SpecialtyData(object):
+    id = 0
+
+    def __init__(self, id, data):
+        self.id = id
+        self.data = data
+        self.game = data.game
+
+        self.specialties = [Specialty(self, mod) for mod in self.game.specialties.all()]
+        self.specialties_dict = {}
+        for spec in self.specialties:
+            if not spec.stat in self.specialties_dict.keys():
+                self.specialties_dict[spec.stat] = list()
+            self.specialties_dict[spec.stat].append(spec)
+
+    def add(self, creator, stat=None, name=None):
+        if not stat:
+            raise ValueError("Stat not found!")
+        stat = partial_match(self.data.stats, stat)
+        if not stat:
+            raise ValueError("Stat not found!")
+        if not name:
+            raise ValueError("Name not entered!")
+        name = dramatic_capitalize(sanitize_string(name))
+        if self.game.specialties.filter(stat_id=stat.id, key__iexact=name).count():
+            raise ValueError("Specialty of that name already exists.")
+        new_mod = self.game.specialties.create(stat_id=stat.id, key=name, creator=creator)
+        new_spec = Specialty(self.data, new_mod)
+        self.specialties.append(new_spec)
+        spec_list = self.specialties_dict.get(stat, list())
+        spec_list.append(new_spec)
+        self.specialties_dict[stat] = spec_list
+
 
 class GameData(object):
     id = 0
 
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, gamename):
+        self.game, created = Game.objects.get_or_create(key=gamename)
 
         self.stats = [stat() for stat in ALL_STATS]
         self.stats_dict = {stat.id: stat for stat in self.stats}
@@ -350,5 +491,13 @@ class GameData(object):
 
         self.templates = [tem(self) for tem in ALL_TEMPLATES]
 
+        self.specialties = SpecialtyData(id, self)
 
-GAME_DATA = GameData(1)
+        self.merits = MeritData(self)
+        self.flaws = FlawData(self)
+
+        self.powers = [cla(self) for cla in ALL_POWERSETS]
+        self.powers_dict = {cla.category_id: cla for cla in self.powers}
+
+
+GAME_DATA = GameData('Exalted 3e')

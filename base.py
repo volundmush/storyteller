@@ -105,6 +105,50 @@ class Willpower(Advantage):
     use = CharacterWillpowerStat
 
 
+# Specialty Data
+class CharacterSpecialty(object):
+    pass
+
+
+class Specialty(object):
+    use = CharacterSpecialty
+
+    def __init__(self, data, model):
+        self.stat = data.stats_dict[model.stat_id]
+        self.model = model
+        self.name = model.key
+        self.id = model.id
+
+    def __str__(self):
+        return self.name
+
+    def __int__(self):
+        return self.id
+
+    @property
+    def full_name(self):
+        return '%s/%s' % (self.stat.name, self.name)
+
+# Merit Data
+class CharacterMerit(object):
+    pass
+
+
+class Merit(object):
+    use = CharacterMerit
+    category = 'Merit'
+
+    def __init__(self, data, model):
+        self.data = data
+        self.model = model
+        self.id = model.id
+        self.name = model.key
+
+    def __str__(self):
+        return self.name
+
+
+# Splat Data
 class Splat(object):
     name = '<Unknown'
     id = 0
@@ -117,6 +161,9 @@ class Splat(object):
         return self.id
 
 
+
+
+# Template Data
 class CharacterTemplate(object):
     pass
 

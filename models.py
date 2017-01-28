@@ -1,7 +1,9 @@
 from django.db import models
 from evennia.utils.ansi import ANSIString
 from athanor.core.models import WithKey
-from athanor.utils.text import dramatic_capitalize, sanitize_string
+
+class Game(models.Model):
+    key = models.CharField(max_length=255, db_index=True, unique=True)
 
 class WithDotValue(models.Model):
     rating = models.PositiveSmallIntegerField(default=0, db_index=True)
@@ -36,7 +38,7 @@ class WithDotValue(models.Model):
 
 
 class Persona(models.Model):
-    game_id = models.PositiveSmallIntegerField(default=0)
+    game = models.ForeignKey('storyteller.Game', related_name='personas')
     key = models.CharField(max_length=255, db_index=True)
     parent = models.ForeignKey('storyteller.Persona', null=True, default=None, related_name='children')
     character = models.ForeignKey('objects.ObjectDB', related_name='personas')
@@ -46,7 +48,7 @@ class Persona(models.Model):
     z_splat = models.PositiveIntegerField(null=True)
 
     class Meta:
-        unique_together = (('key', 'character'),)
+        unique_together = (('key', 'character', 'game'),)
 
     def __repr__(self):
         return '<Persona: %s>' % self.key
@@ -78,11 +80,14 @@ class Stat(WithDotValue):
 
 
 class SpecialtyName(models.Model):
+    game = models.ForeignKey('storyteller.Game', related_name='specialties')
     stat_id = models.PositiveIntegerField(default=0)
     key = models.CharField(max_length=255, db_index=True)
+    creator = models.ForeignKey('objects.ObjectDB', related_name='+')
+    date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = (('stat_id', 'key'),)
+        unique_together = (('game', 'stat_id', 'key'),)
 
 
 class Specialty(WithDotValue):
@@ -93,15 +98,26 @@ class Specialty(WithDotValue):
         unique_together = (('specialty', 'persona'),)
 
 
+class MeritName(models.Model):
+    game = models.ForeignKey('storyteller.Game', related_name='merits')
+    category_id = models.PositiveSmallIntegerField(default=0)
+    key = models.CharField(max_length=255, db_index=True)
+    creator = models.ForeignKey('objects.ObjectDB', related_name='+')
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (('game', 'category_id', 'key'),)
+
+
 class Merit(models.Model):
     persona = models.ForeignKey('storyteller.Persona', related_name='merits')
-    merit_id = models.PositiveIntegerField(default=0)
+    merit = models.ForeignKey('storyteller.MeritName')
     context = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
 
     class Meta:
-        unique_together = (('persona', 'merit_id', 'context'),)
+        unique_together = (('persona', 'merit', 'context'),)
 
 
 class Pool(models.Model):
