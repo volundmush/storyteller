@@ -1,133 +1,6 @@
 from __future__ import unicode_literals
-from evennia.utils import lazy_property
+from athanor.utils.text import dramatic_capitalize, sanitize_string, partial_match
 
-class CharacterStat(object):
-    owner = None
-    handler = None
-    stat = None
-    rating = None
-
-    def __init__(self, owner, handler, stat):
-        self.owner = owner
-        self.handler = handler
-        self.stat = stat
-
-    def __str__(self):
-        return self.name
-
-    def __int__(self):
-        return self.rating
-
-    @property
-    def name(self):
-        return self.stat.name
-
-    @property
-    def id(self):
-        return self.stat.id
-
-
-class CharacterWillpowerStat(CharacterStat):
-    pass
-
-
-class Stat(object):
-    name = '<unknown>'
-    id = 0
-    category = None
-    sub_category = None
-    tags = tuple()
-    default = 0
-    can_roll = True
-    can_purchase = True
-    can_specialize = False
-    list_order = 0
-    use = CharacterStat
-
-    def __str__(self):
-        return self.name
-
-    def __int__(self):
-        return self.id
-
-    def __repr__(self):
-        return '<%s: (%s) %s>' % (self.category, self.id, self.name)
-
-
-class Attribute(Stat):
-    category = 'Attribute'
-    default = 1
-
-
-class PhysicalAttribute(Attribute):
-    sub_category = 'Physical'
-
-
-class SocialAttribute(Attribute):
-    sub_category = 'Social'
-
-
-class MentalAttribute(Attribute):
-    sub_category = 'Mental'
-
-
-class Skill(Stat):
-    category = 'Skill'
-    default = 0
-    can_specialize = True
-
-
-class PhysicalSkill(Skill):
-    sub_category = 'Physical'
-
-
-class SocialSkill(Skill):
-    sub_category = 'Social'
-
-
-class MentalSkill(Skill):
-    sub_category = 'Mental'
-
-
-class Advantage(Stat):
-    category = 'Advantage'
-
-
-class PowerStat(Advantage):
-    id = 1
-    name = 'PowerStat'
-    default = 1
-
-
-class Willpower(Advantage):
-    id = 2
-    name = 'Willpower'
-    use = CharacterWillpowerStat
-
-
-# Specialty Data
-class CharacterSpecialty(object):
-    pass
-
-
-class Specialty(object):
-    use = CharacterSpecialty
-
-    def __init__(self, data, model):
-        self.stat = data.stats_dict[model.stat_id]
-        self.model = model
-        self.name = model.key
-        self.id = model.id
-
-    def __str__(self):
-        return self.name
-
-    def __int__(self):
-        return self.id
-
-    @property
-    def full_name(self):
-        return '%s/%s' % (self.stat.name, self.name)
 
 # Merit Data
 class CharacterMerit(object):
@@ -161,11 +34,21 @@ class Splat(object):
         return self.id
 
 
-
-
 # Template Data
 class CharacterTemplate(object):
-    pass
+
+    def __init__(self, owner, tem, mod):
+        self.owner = owner
+        self.handler = owner
+        self.data = owner.data
+        self.template = tem
+        self.model = mod
+
+    def __str__(self):
+        return self.template.name
+
+    def __int__(self):
+        return self.template.id
 
 
 class Template(object):
@@ -177,7 +60,7 @@ class Template(object):
     x_name = None
     y_name = None
     z_name = None
-    pool_classes = ()
+    pool_classes = list()
     willpower = 1
     extra_stat_classes = ()
     use = CharacterTemplate

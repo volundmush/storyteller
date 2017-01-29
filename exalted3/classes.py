@@ -1,7 +1,7 @@
 from evennia.utils import lazy_property
 
 from storyteller.classes import StorytellerCharacter
-from storyteller.handler import Ex3Handler
+from storyteller.exalted3.handler import Ex3Handler
 
 
 class Ex3Character(StorytellerCharacter):

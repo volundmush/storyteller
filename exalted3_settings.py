@@ -13,4 +13,4 @@ TIME_DAY_PER_WEEK = 7
 TIME_WEEK_PER_MONTH = 4
 TIME_MONTH_PER_YEAR = 15
 
-ROOT_URLCONF = 'storyteller.exalted3.urls'
+#ROOT_URLCONF = 'storyteller.exalted3.urls'

@@ -2,42 +2,35 @@ from django.db import models
 from evennia.utils.ansi import ANSIString
 from athanor.core.models import WithKey
 
+
 class Game(models.Model):
+    """
+    This Model is used to seperate one game (Exalted 3, Chronicles of Darkness, etc) from another. This allows the
+    single running database to potentially service multiple games.
+    """
     key = models.CharField(max_length=255, db_index=True, unique=True)
 
+
 class WithDotValue(models.Model):
+    """
+    Abstract class to represent general kinds of stats that have dot ratings. Skills, Merits, etc.
+    """
     rating = models.PositiveSmallIntegerField(default=0, db_index=True)
 
     class Meta:
         abstract = True
 
-    @property
-    def display_name(self):
-        return str(self)
-
-    @property
-    def display_prefix(self):
-        return ' '
-
-    def sheet_format(self, width=23, no_prefix=False, fill_char='.', colors=None):
-        if not colors:
-            colors = {'statname': 'n', 'statfill': 'n', 'statdot': 'n'}
-        display_name = ANSIString('{%s%s{n' % (colors['statname'], self.display_name))
-        if no_prefix:
-            prefix = ' '
-        else:
-            prefix = ANSIString('{r%s{n' % self.display_prefix)
-        final_display = prefix + display_name
-        if self.rating > width - len(final_display) - 1:
-            dot_display = ANSIString('{%s%s{n' % (colors['statdot'], self.rating))
-        else:
-            dot_display = ANSIString('{%s%s{n' % (colors['statdot'], '*' * int(self)))
-        fill_length = width - len(final_display) - len(dot_display)
-        fill = ANSIString('{%s%s{n' % (colors['statfill'], fill_char * fill_length))
-        return final_display + fill + dot_display
-
 
 class Persona(models.Model):
+    """
+    The big daddy of the Models. This is designed to accomodate both Exalted and Chronicles of Darkness.
+    key = name of the character.
+    parent = self referential foreign key, used for various character types like Demons or Social-build Solars. Allows
+             one Character to have various sub-forms. Not currently implemented.
+    template = The ID of the Template in use. (Solar, Mortal, Vampire, Mage, Lunar, etc.) Default is 1: Mortal.
+    x, y, z splats = Splat variations per-template. For exalted, x_splat is the ID of the Caste/Aspect. For Cod,
+            things like Werewolf Auspice or Vampire Clan. Y and Z are for Chronicles other subtypes.
+    """
     game = models.ForeignKey('storyteller.Game', related_name='personas')
     key = models.CharField(max_length=255, db_index=True)
     parent = models.ForeignKey('storyteller.Persona', null=True, default=None, related_name='children')
@@ -71,6 +64,9 @@ class TraitAnswer(WithKey):
 
 
 class Stat(WithDotValue):
+    """
+    Model used for storing Stat data. Attributes, Skills, Abilities, Advantages, etc.
+    """
     persona = models.ForeignKey('storyteller.Persona', related_name='stats')
     stat_id = models.PositiveIntegerField(default=0, db_index=True)
 
@@ -78,8 +74,11 @@ class Stat(WithDotValue):
         unique_together = (('persona', 'stat_id',),)
 
 
-
 class SpecialtyName(models.Model):
+    """
+    Model is used for storing the names of Specialties so that if two Characters have the same specialty,
+    it only exists once in the database.
+    """
     game = models.ForeignKey('storyteller.Game', related_name='specialties')
     stat_id = models.PositiveIntegerField(default=0)
     key = models.CharField(max_length=255, db_index=True)
@@ -91,6 +90,9 @@ class SpecialtyName(models.Model):
 
 
 class Specialty(WithDotValue):
+    """
+    Model for storing Character-specific Specialty data.
+    """
     persona = models.ForeignKey('storyteller.Persona', related_name='specialties')
     specialty = models.ForeignKey('storyteller.SpecialtyName', related_name='users')
 
@@ -98,26 +100,51 @@ class Specialty(WithDotValue):
         unique_together = (('specialty', 'persona'),)
 
 
-class MeritName(models.Model):
-    game = models.ForeignKey('storyteller.Game', related_name='merits')
-    category_id = models.PositiveSmallIntegerField(default=0)
+class CustomStatSet(models.Model):
+    game = models.ForeignKey('storyteller.Game', related_name='customs')
+    category_id = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = (('game', 'category_id'),)
+
+
+class CustomStatName(models.Model):
+    category = models.ForeignKey('storyteller.CustomStatSet', related_name='stats')
     key = models.CharField(max_length=255, db_index=True)
     creator = models.ForeignKey('objects.ObjectDB', related_name='+')
     date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = (('game', 'category_id', 'key'),)
+        unique_together = (('category', 'key'),)
 
 
-class Merit(models.Model):
-    persona = models.ForeignKey('storyteller.Persona', related_name='merits')
-    merit = models.ForeignKey('storyteller.MeritName')
+class CustomSpecialtyName(models.Model):
+    stat = models.ForeignKey('storyteller.CustomStatName', related_name='specialties')
+    key = models.CharField(max_length=255, db_index=True)
+    creator = models.ForeignKey('objects.ObjectDB', related_name='+')
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (('stat', 'key'),)
+
+
+class CustomStat(WithDotValue):
+    persona = models.ForeignKey('storyteller.Persona', related_name='customs')
+    stat = models.ForeignKey('storyteller.CustomStatName', related_name='users')
     context = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
 
     class Meta:
-        unique_together = (('persona', 'merit', 'context'),)
+        unique_together = (('persona', 'stat', 'contest'),)
+
+
+class CustomSpecialty(WithDotValue):
+    stat = models.ForeignKey('storyteller.CustomStat', related_name='specialties')
+    name = models.ForeignKey('storyteller.CustomSpecialtyName', related_name='users')
+
+    class Meta:
+        unique_together = (('stat', 'name'),)
 
 
 class Pool(models.Model):

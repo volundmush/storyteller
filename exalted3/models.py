@@ -72,6 +72,7 @@ class StyleCharm(models.Model):
     class Meta:
         unique_together = (('persona', 'charm'),)
 
+
 class Craft(models.Model):
     key = models.CharField(max_length=255, db_index=True, unique=True)
     creator = models.ForeignKey('objects.ObjectDB', related_name='+')
