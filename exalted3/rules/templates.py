@@ -183,29 +183,7 @@ class Solar(Template):
 
 # Abyssal
 
-class Dusk(Caste):
-    key = 'Dusk'
-    id = 11
 
-
-class Midnight(Caste):
-    key = 'Midnight'
-    id = 12
-
-
-class Day(Caste):
-    key = 'Day'
-    id = 13
-
-
-class Daybreak(Caste):
-    key = 'Daybreak'
-    id = 14
-
-
-class Moonshadow(Caste):
-    key = 'Moonshadow'
-    id = 15
 
 
 class Abyssal(Template):
@@ -213,49 +191,3 @@ class Abyssal(Template):
     id = 3
     caste_choices = (Dusk, Midnight, Day, Daybreak, Moonshadow)
     caste_default = Dusk
-
-# Terrestrial
-class Aspect(Caste):
-    display = 'Aspect'
-
-
-class Fire(Aspect):
-    key = 'Fire'
-    id = 16
-
-
-class Water(Aspect):
-    key = 'Water'
-    id = 17
-
-
-class Air(Aspect):
-    key = 'Air'
-    id = 18
-
-
-class Earth(Aspect):
-    key = 'Earth'
-    id = 19
-
-
-class Wood(Aspect):
-    key = 'Wood'
-    id = 20
-
-
-class Terrestrial(Template):
-    key = 'Terrestrial'
-    id = 4
-    caste_choices = (Fire, Water, Air, Earth, Wood)
-    caste_default = Fire
-    pools = TERRESTRIAL_POOLS
-
-
-TEMPLATE_MAP = {1: Mortal, 2: Solar, 3: Abyssal, 4: Terrestrial,}
-
-CASTE_MAP = {1: Warrior, 2: Priest, 3: Criminal, 4: Savant, 5: Broker,
-             6: Dawn, 7: Zenith, 8: Night, 9: Twilight, 10: Eclipse,
-             11: Dusk, 12: Midnight, 13: Day, 14: Daybreak, 15: Moonshadow,
-             16: Fire, 17: Water, 18: Air, 19: Earth, 20: Wood,
-             }

@@ -3,6 +3,30 @@ from athanor.utils.text import dramatic_capitalize, sanitize_string, partial_mat
 
 # CUSTOM STAT HANDLING
 
+
+class CharacterCustomSpecialty(object):
+
+    def __init__(self, owner, spec, model):
+        self.owner = owner
+        self.handler = owner.handler
+        self.game = owner.game
+        self.data = owner.data
+        self.spec = spec
+        self.model = model
+        self.id = int(model.id)
+        self.rating = int(model.rating)
+
+    @property
+    def name(self):
+        return self.spec.name
+
+    def __str__(self):
+        return self.name
+
+    def __int__(self):
+        return self.rating
+
+
 class CharacterCustomStat(object):
     specialty = CharacterCustomSpecialty
 
@@ -35,28 +59,6 @@ class CharacterCustomStat(object):
 
     def load(self):
         pass
-
-class CharacterCustomSpecialty(object):
-
-    def __init__(self, owner, spec, model):
-        self.owner = owner
-        self.handler = owner.handler
-        self.game = owner.game
-        self.data = owner.data
-        self.spec = spec
-        self.model = model
-        self.id = int(model.id)
-        self.rating = int(model.rating)
-
-    @property
-    def name(self):
-        return self.spec.name
-
-    def __str__(self):
-        return self.name
-
-    def __int__(self):
-        return self.rating
 
 
 class CustomSpecialty(object):

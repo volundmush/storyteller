@@ -115,6 +115,3 @@ class GameData(object):
     def prepare_templates(self):
         self.templates = [tem(self) for tem in self.load_templates]
         self.templates_dict = {tem.id: tem for tem in self.templates}
-
-
-GAME_DATA = GameData('Exalted 3e')

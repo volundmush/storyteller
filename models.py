@@ -1,5 +1,4 @@
 from django.db import models
-from evennia.utils.ansi import ANSIString
 from athanor.core.models import WithKey
 
 
@@ -145,6 +144,23 @@ class CustomSpecialty(WithDotValue):
 
     class Meta:
         unique_together = (('stat', 'name'),)
+
+
+class StatPowerSet(models.Model):
+    game = models.ForeignKey('storyteller.Game', related_name='statpowers')
+    category_id = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = (('game', 'category_id'),)
+
+
+class StatPower(WithDotValue):
+    category = models.ForeignKey('storyteller.StatPowerSet', related_name='stats')
+    persona = models.ForeignKey('storyteller.CustomStatName', related_name='statpowers')
+    stat_id = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = (('category', 'persona', 'stat_id'),)
 
 
 class Pool(models.Model):
