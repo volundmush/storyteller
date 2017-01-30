@@ -68,6 +68,8 @@ class Stat(WithDotValue):
     """
     persona = models.ForeignKey('storyteller.Persona', related_name='stats')
     stat_id = models.PositiveIntegerField(default=0, db_index=True)
+    flag_1 = models.PositiveSmallIntegerField(default=0)
+    flag_2 = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         unique_together = (('persona', 'stat_id',),)
@@ -99,68 +101,36 @@ class Specialty(WithDotValue):
         unique_together = (('specialty', 'persona'),)
 
 
-class CustomStatSet(models.Model):
-    game = models.ForeignKey('storyteller.Game', related_name='customs')
+class ExtraSet(models.Model):
+    game = models.ForeignKey('storyteller.Game', related_name='extras')
     category_id = models.PositiveIntegerField(default=0)
+    sub_id = models.PositiveIntegerField(default=0)
 
     class Meta:
-        unique_together = (('game', 'category_id'),)
+        unique_together = (('game', 'category_id', 'sub_id'),)
 
 
-class CustomStatName(models.Model):
-    category = models.ForeignKey('storyteller.CustomStatSet', related_name='stats')
+class ExtraName(models.Model):
+    category = models.ForeignKey('storyteller.ExtraSet', related_name='entries', null=True, default=None)
     key = models.CharField(max_length=255, db_index=True)
+    parent = models.ForeignKey('storyteller.ExtraName', null=True, default=None, related_name='specialties')
     creator = models.ForeignKey('objects.ObjectDB', related_name='+')
     date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = (('category', 'key'),)
+        unique_together = (('category', 'key', 'parent'),)
 
 
-class CustomSpecialtyName(models.Model):
-    stat = models.ForeignKey('storyteller.CustomStatName', related_name='specialties')
-    key = models.CharField(max_length=255, db_index=True)
-    creator = models.ForeignKey('objects.ObjectDB', related_name='+')
-    date_created = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = (('stat', 'key'),)
-
-
-class CustomStat(WithDotValue):
-    persona = models.ForeignKey('storyteller.Persona', related_name='customs')
-    stat = models.ForeignKey('storyteller.CustomStatName', related_name='users')
+class Extra(WithDotValue):
+    persona = models.ForeignKey('storyteller.Persona', related_name='extras')
+    stat = models.ForeignKey('storyteller.ExtraName', related_name='users')
     context = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
+    many = models.TextField(null=True, blank=True)
 
     class Meta:
-        unique_together = (('persona', 'stat', 'contest'),)
-
-
-class CustomSpecialty(WithDotValue):
-    stat = models.ForeignKey('storyteller.CustomStat', related_name='specialties')
-    name = models.ForeignKey('storyteller.CustomSpecialtyName', related_name='users')
-
-    class Meta:
-        unique_together = (('stat', 'name'),)
-
-
-class StatPowerSet(models.Model):
-    game = models.ForeignKey('storyteller.Game', related_name='statpowers')
-    category_id = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        unique_together = (('game', 'category_id'),)
-
-
-class StatPower(WithDotValue):
-    category = models.ForeignKey('storyteller.StatPowerSet', related_name='stats')
-    persona = models.ForeignKey('storyteller.CustomStatName', related_name='statpowers')
-    stat_id = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        unique_together = (('category', 'persona', 'stat_id'),)
+        unique_together = (('persona', 'stat', 'context'),)
 
 
 class Pool(models.Model):

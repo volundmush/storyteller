@@ -29,6 +29,9 @@ class Template(object):
     pool_classes = list()
     willpower = 1
     use = CharacterTemplate
+    base_colors = {'border': 'n', 'slash': 'n', 'section_name': 'n',
+                   'statdot': 'n', 'statname': 'n', 'statfill': 'n'}
+    tem_colors = {}
 
     def __str__(self):
         return self.name
@@ -44,6 +47,9 @@ class Template(object):
         self.handler = owner
         self.game = owner.game
         self.data = owner
+        self.colors = dict()
+        for d in (self.base_colors, self.tem_colors):
+            self.colors.update(d)
 
         if self.x_classes:
             self.x_choices = tuple([self.data.x_splats_dict[cla.id] for cla in self.x_classes])

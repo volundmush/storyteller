@@ -7,7 +7,7 @@ class _Ex3StatHandler(StatHandler):
 
     @property
     def abilities(self):
-        return [stat for stat in self.stats if stat.category == 'Ability']
+        return sorted([stat for stat in self.stats if stat.category == 'Ability'], key=lambda abil: abil.list_order)
 
     @property
     def essence(self):

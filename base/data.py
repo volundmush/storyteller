@@ -55,7 +55,7 @@ class CharacterWillpowerStat(CharacterStat):
 
     def load(self):
         if self.rating == 99:
-            self.rating = self.owner.template.template.willpower
+            self.rating = self.handler.template.template.willpower
             self.save()
 
 class Willpower(Advantage):
@@ -77,6 +77,7 @@ class GameData(object):
     load_merits = None
     load_pools = None
     load_templates = None
+    load_sheet = None
 
     def __init__(self, gamename):
         self.game, created = Game.objects.get_or_create(key=gamename)

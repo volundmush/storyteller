@@ -1,6 +1,6 @@
 from storyteller.storyteller_settings import *
 
-INSTALLED_APPS = INSTALLED_APPS + ('storyteller.exalted3.apps.Ex3Config',)
+INSTALLED_APPS = INSTALLED_APPS + ('storyteller.exbase.apps.ExConfig',)
 
 BASE_CHARACTER_TYPECLASS = "storyteller.exalted3.classes.Ex3Character"
 

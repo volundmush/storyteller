@@ -11,6 +11,7 @@ class MartialArts(OldMartial):
     name = 'Martial Arts'
     use = CharacterMartial
 
+BASE_STATS = STAT_BASE + (MartialArts, Brawl)
 
 
-ALL_STATS = STAT_BASE + (MartialArts, Brawl)
+ALL_STATS = BASE_STATS

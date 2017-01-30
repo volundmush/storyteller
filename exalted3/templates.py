@@ -1,8 +1,7 @@
 from __future__ import unicode_literals
 
-from storyteller.exalted3.pools import SOLAR_POOLS, MORTAL_POOLS
-
 from storyteller.exbase.templates import Mortal as BaseMortal, Solar as BaseSolar
+from storyteller.exalted3.pools import SOLAR_POOLS, MORTAL_POOLS
 
 
 class Mortal(BaseMortal):

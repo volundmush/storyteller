@@ -1,11 +1,10 @@
 from __future__ import unicode_literals
 
-from athanor.utils.text import dramatic_capitalize, partial_match, sanitize_string
-
-from storyteller.exalted3.models import Trait as TraitModel, TraitAnswer
-
 from storyteller.exalted3.rules.pools import *
 from storyteller.exalted3.rules.stats import *
+
+from athanor.utils.text import dramatic_capitalize, partial_match, sanitize_string
+from storyteller.exbase.models import Trait as TraitModel, TraitAnswer
 
 def clean_string(value):
     return dramatic_capitalize(sanitize_string(value, strip_ansi=True, strip_mxp=True,

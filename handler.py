@@ -1,22 +1,39 @@
 from __future__ import unicode_literals
 
+class Handler(object):
+    """
+    Not meant to be used directly. Parent Class for all StorytellerHandler Sections!
+    """
 
-class StatHandler(object):
+    def __init__(self, owner):
+        self.owner = owner
+        self.handler = owner
+        self.data = owner.data
+        self.game = owner.game
+        self.load()
+        self.load_extra()
+
+    def load(self):
+        """
+        Meant to be overloaded for each Handler.
+        :return:
+        """
+        pass
+
+    def load_extra(self):
+        """
+        A second overloadable so you don't have to super() if you inherit from the existing Handlers for things.
+        :return:
+        """
+        pass
+
+class StatHandler(Handler):
     """
     Object responsible for storing, sorting, readying and managing the Stats (Abilities, Attributes, Advantages,
     etc). Component of StorytellerHandler.
     """
 
-    def __init__(self, owner):
-        """
-        Construct the StatHandler. Load all stats and prepare lists and dictionaries for referencing.
-
-        :param owner: An Instance of StorytellerHandler.
-        """
-        self.owner = owner
-        self.handler = owner
-        self.data = owner.data
-        self.game = owner.game
+    def load(self):
         self.owner.persona.stats.all().exclude(id__in=self.data.stats_dict.keys()).delete()
         stats = self.owner.persona.stats.all()
         if not stats or len(self.data.stats) != stats.count():
@@ -30,9 +47,6 @@ class StatHandler(object):
         self.stats = sorted(all_stats, key=lambda stat: stat.list_order)
         self.stats_name = {stat.name: stat for stat in self.stats}
         self.stats_dict = {stat.id: stat for stat in self.stats}
-
-        # Call hook for specific game stuff.
-        self.load_extra()
 
     @property
     def attributes(self):
@@ -65,12 +79,32 @@ class StatHandler(object):
             stat = self.data.stats_dict[id]
             new = self.owner.persona.stats.create(stat_id=stat.id, rating=stat.default)
 
-    def load_extra(self):
-        """
-        This method is meant to be overloaded for running additional initializations per-game.
-        :return:
-        """
-        pass
+
+class SheetHandler(Handler):
+    """
+    Object responsible for manging Sheet Output.
+    """
+    def load(self):
+        self.sections = sorted([sec(self) for sec in self.data.load_sheet], key=lambda ord: ord.list_order)
+
+    def render(self, width=80):
+        message = list()
+        for sec in [sec for sec in self.sections if sec.display]:
+            rendered = sec.render(width=width)
+            if rendered:
+                message.append(rendered)
+        return '\n'.join(message)
+
+
+class PoolHandler(Handler):
+    """
+    Object responsible for manging Pools.
+    """
+    pass
+
+
+class ExtraHandler(Handler):
+    pass
 
 
 class StorytellerHandler(object):
@@ -80,12 +114,16 @@ class StorytellerHandler(object):
     """
     data = None
     stat_handler = StatHandler
+    sheet_handler = SheetHandler
+    pool_handler = PoolHandler
+    extra_handler = ExtraHandler
 
     def __init__(self, owner):
         self.owner = owner
         self.game = self.data.game
 
-        for prep in (self.prepare_template, self.prepare_stats):
+        for prep in (self.prepare_template, self.prepare_stats, self.prepare_sheet, self.prepare_extras,
+                     self.prepare_pools):
             prep()
 
     def prepare_template(self):
@@ -98,3 +136,12 @@ class StorytellerHandler(object):
 
     def prepare_stats(self):
         self.stats = self.stat_handler(self)
+
+    def prepare_sheet(self):
+        self.sheet = self.sheet_handler(self)
+
+    def prepare_pools(self):
+        self.pools = self.pool_handler(self)
+
+    def prepare_extras(self):
+        self.extras = self.extra_handler(self)

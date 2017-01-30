@@ -1,7 +1,9 @@
 from __future__ import unicode_literals
 
 from evennia.utils import lazy_property
-from storyteller.exalted3.models import Pool as PoolModel, PoolCommit
+
+from storyteller.exbase.models import Pool as PoolModel
+
 
 class Commit(object):
     key = '<unknown>'
