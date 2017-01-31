@@ -73,17 +73,16 @@ class GameData(object):
     load_x = None
     load_y = None
     load_z = None
-    load_custom = None
-    load_merits = None
     load_pools = None
     load_templates = None
     load_sheet = None
+    load_extra = None
 
     def __init__(self, gamename):
         self.game, created = Game.objects.get_or_create(key=gamename)
 
         for prep in (self.prepare_stats, self.prepare_x, self.prepare_y, self.prepare_z,
-                     self.prepare_custom, self.prepare_merits, self.prepare_pools, self.prepare_templates):
+                     self.prepare_extra, self.prepare_pools, self.prepare_templates):
             prep()
 
     def prepare_stats(self):
@@ -103,14 +102,13 @@ class GameData(object):
         self.z_splats = ()
         self.z_splats_dict = {}
 
-    def prepare_custom(self):
-        pass
-
-    def prepare_merits(self):
-        pass
+    def prepare_extra(self):
+        self.extras = [ex(self) for ex in self.load_extra]
+        self.extras_dict = {(ex.category_id, ex.sub_id): ex for ex in self.extras}
+        self.extras_name = {ex.name: ex for ex in self.extras}
 
     def prepare_pools(self):
-        self.pools = [pool() for pool in self.load_pools]
+        self.pools = [pool(self) for pool in self.load_pools]
         self.pools_dict = {pool.id: pool for pool in self.pools}
 
     def prepare_templates(self):

@@ -30,8 +30,7 @@ class CharmSet(WordSet):
 
 
 class CharmManager(SubManager):
-    can_add = False
-    use = CharmSet
+    sub = CharmSet
     category_id = 100
     choice_init = {}
     extra_init = {}
@@ -42,7 +41,7 @@ class CharmManager(SubManager):
         choices.update(self.extra_init)
         self.subs = list()
         for k, v in choices.iteritems():
-            new_charms = self.use(self, self.root, k, v)
+            new_charms = self.sub(self, self.root, k, v)
             self.subs.append(new_charms)
         self.subs_dict = {cha.id: cha for cha in self.subs}
         self.subs_name = {cha.name: cha for cha in self.subs}

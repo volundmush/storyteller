@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+
 class CharacterExtra(object):
 
     def __init__(self, owner, extra, row):
@@ -19,6 +20,7 @@ class CharacterExtra(object):
 
     def name(self):
         return self.extra.name
+
 
 class CharacterExtraStat(CharacterExtra):
     pass
@@ -83,23 +85,29 @@ class ExtraSet(object):
     sub_id = 0
     name = '<unknown>'
     can_add = True
+    can_take = True
+    can_extend = False
     sub_classes = ()
     static_classes = ()
     use = ExtraStat
+    sub = None
     use_subs = False
 
-    def __init__(self, owner, root):
-        self.root = root
+    def __init__(self, owner, root=None):
         self.owner = owner
-        self.data = owner.data
-        self.game = owner.game
-        self.handler = owner.handler
+        if not root:
+            self.root = self
+            self.data = owner
+            self.game = owner.game
+            self.handler = owner
+        else:
+            self.root = root
+            self.data = owner.data
+            self.game = owner.game
+            self.handler = owner.handler
         self.model, created = self.game.extras.get_or_create(category_id=self.category_id, sub_id=self.sub_id)
         self.subs = list()
         self.subs_dict = dict()
-        self.entries = list()
-        self.entries_dict = dict()
-        self.entries_name = dict()
         self.stats = list()
         self.stats_dict = dict()
         self.stats_name = dict()
@@ -120,13 +128,18 @@ class ExtraSet(object):
             raise ValueError("Cannot add entries to %s!" % self.name)
 
 
+    def extend(self, name=None):
+        if not self.can_extend:
+            raise ValueError("Cannot extend %s with new sub-categories." % self.name)
+
+
 class MutableSet(ExtraSet):
     can_add = True
 
     def load(self):
-        self.entries = [self.use(self, row) for row in self.model.entries.all()]
-        self.entries_dict = {ent.id: ent for ent in self.entries}
-        self.entries_name = {ent.name: ent for ent in self.entries}
+        self.stats = [self.use(self, row) for row in self.model.entries.all()]
+        self.stats_dict = {ent.id: ent for ent in self.stats}
+        self.stats_name = {ent.name: ent for ent in self.stats}
 
 
 class MeritSet(MutableSet):
@@ -139,6 +152,7 @@ class MeritSet(MutableSet):
 class SubManager(ExtraSet):
     can_add = False
     use_subs = True
+    can_take = False
 
     def load(self):
         self.subs = [cla(self, self.root) for cla in self.sub_classes]
