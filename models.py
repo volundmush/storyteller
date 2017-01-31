@@ -103,8 +103,11 @@ class Specialty(WithDotValue):
 
 class ExtraSet(models.Model):
     game = models.ForeignKey('storyteller.Game', related_name='extras')
-    category_id = models.PositiveIntegerField(default=0)
-    sub_id = models.PositiveIntegerField(default=0)
+    category_id = models.PositiveIntegerField(default=0, db_index=True)
+    sub_id = models.PositiveIntegerField(default=0, db_index=True)
+    key = models.CharField(max_length=255, db_index=True)
+    creator = models.ForeignKey('objects.ObjectDB', related_name='+', null=True, default=None)
+    date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = (('game', 'category_id', 'sub_id'),)

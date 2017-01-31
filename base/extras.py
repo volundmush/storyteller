@@ -1,4 +1,5 @@
 from __future__ import unicode_literals
+from athanor.utils.text import dramatic_capitalize, sanitize_string
 
 
 class CharacterExtra(object):
@@ -92,8 +93,9 @@ class ExtraSet(object):
     use = ExtraStat
     sub = None
     use_subs = False
+    use_stats = True
 
-    def __init__(self, owner, root=None):
+    def __init__(self, owner, root=None, model=None, sub_id=None, name=None):
         self.owner = owner
         if not root:
             self.root = self
@@ -105,16 +107,39 @@ class ExtraSet(object):
             self.data = owner.data
             self.game = owner.game
             self.handler = owner.handler
-        self.model, created = self.game.extras.get_or_create(category_id=self.category_id, sub_id=self.sub_id)
+        if model:
+            self.model = model
+            self.sub_id = int(model.sub_id)
+            self.name = str(model.key)
+        else:
+            self.model, created = self.game.extras.get_or_create(category_id=self.category_id,
+                                                                 sub_id=self.sub_id, key=self.name)
+        if name:
+            self.name = name
+        if sub_id:
+            self.sub_id = sub_id
         self.subs = list()
         self.subs_dict = dict()
         self.stats = list()
         self.stats_dict = dict()
         self.stats_name = dict()
-        self.load()
 
-    def load(self):
-        pass
+        if self.use_stats:
+            self.load_stats()
+
+        if self.use_subs:
+            self.load_subs()
+
+    def load_stats(self):
+        self.stats = [self.use(self, row) for row in self.model.entries.all()]
+        self.stats_dict = {ent.id: ent for ent in self.stats}
+        self.stats_name = {ent.name: ent for ent in self.stats}
+
+    def load_subs(self):
+        rows = self.model.__class__.objects.filter(category_id=self.category_id)
+        self.subs = [self.sub(self, root=self.root, model=row) for row in rows]
+        self.subs_dict = {sub.sub_id: sub for sub in self.subs}
+        self.subs_name = [self.use(self, row) for row in self.model.entries.all()]
 
     @property
     def id(self):
@@ -123,23 +148,40 @@ class ExtraSet(object):
     def __str__(self):
         return self.name
 
-    def add(self, name=None):
+    def add(self, creator, name=None):
         if not self.can_add:
             raise ValueError("Cannot add entries to %s!" % self.name)
-
+        if not name:
+            raise ValueError("No name entered!")
+        name = dramatic_capitalize(sanitize_string(name))
+        if self.model.entries.filter(key__iexact=name).count():
+            raise ValueError("Name is already in use!")
+        new_mod = self.model.entries.create(creator=creator, key=name)
+        new_stat = self.use(self, new_mod)
+        self.stats.append(new_stat)
+        self.stats_dict[new_stat.id] = new_stat
+        self.stats_name[name] = new_stat
+        return new_stat
 
     def extend(self, name=None):
         if not self.can_extend:
             raise ValueError("Cannot extend %s with new sub-categories." % self.name)
+        if not name:
+            raise ValueError("No name entered!")
+        name = dramatic_capitalize(sanitize_string(name))
+        old_ids = self.model.__class__.objects.filter(category_id=self.category_id).values_list('sub_id', flat=True)
+        new_id = max(old_ids) + 1
+        new_mod = self.model.__class__.objects.create(category_id=self.category_id, sub_id=new_id, key=name)
+        new_sub = self.sub(self, root=self.root, model=new_mod)
+        self.subs.append(new_sub)
+        self.subs_dict[new_sub.sub_id] = new_sub
+        self.subs_name[name] = new_sub
+        return new_sub
+
 
 
 class MutableSet(ExtraSet):
     can_add = True
-
-    def load(self):
-        self.stats = [self.use(self, row) for row in self.model.entries.all()]
-        self.stats_dict = {ent.id: ent for ent in self.stats}
-        self.stats_name = {ent.name: ent for ent in self.stats}
 
 
 class MeritSet(MutableSet):
@@ -153,11 +195,7 @@ class SubManager(ExtraSet):
     can_add = False
     use_subs = True
     can_take = False
-
-    def load(self):
-        self.subs = [cla(self, self.root) for cla in self.sub_classes]
-        self.subs_dict = {sub.name: sub for sub in self.subs}
-        self.entries = [self.use(self, row) for row in self.model.entries.all()]
+    use_stats = False
 
 
 class StaticSet(ExtraSet):
@@ -165,7 +203,7 @@ class StaticSet(ExtraSet):
     name = 'Extras'
     can_add = False
 
-    def load(self):
+    def load_stats(self):
         self.stats = [sta(self) for sta in self.static_classes]
         self.stats_dict = {sta.id: sta for sta in self.stats}
         self.stats_name = {sta.name: sta for sta in self.stats}

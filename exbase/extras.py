@@ -35,7 +35,7 @@ class CharmManager(SubManager):
     choice_init = {}
     extra_init = {}
 
-    def load(self):
+    def load_subs(self):
         choices = dict()
         choices.update(self.choice_init)
         choices.update(self.extra_init)
