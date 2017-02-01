@@ -2,6 +2,124 @@ from __future__ import unicode_literals
 from athanor.utils.text import dramatic_capitalize, sanitize_string
 
 
+class CharacterExtraSet(object):
+    add_increases_quantity = False
+    set_is_add = False
+    on_zero_remove = False
+
+    def __init__(self, owner, extra, root=None, parent=None):
+        self.character = owner.character
+        self.persona = owner.persona
+        self.owner = owner
+        self.game = owner.game
+        self.data = owner.data
+        self.handler = owner.handler
+        self.root = root
+        self.parent = parent
+        self.extra = extra
+        self.subs = list()
+        self.subs_name = dict()
+        self.subs_dict = dict()
+        self.stats = list()
+        self.stats_dict = dict()
+        self.stats_name = dict()
+
+        if self.extra.use_stats:
+            self.load_stats()
+
+        if self.extra.use_subs:
+            self.load_subs()
+
+        self.extra.users.append(self)
+
+    def __repr__(self):
+        if self.parent:
+            return '<%s: %s>' % (self.parent.name, self.name)
+        return '<Extras: %s>' % (self.name)
+
+    def __str__(self):
+        return self.name
+
+    def __int__(self):
+        return self.id
+
+    @property
+    def name(self):
+        return self.extra.name
+
+    @property
+    def id(self):
+        return self.extra.id
+
+    def load_stats(self):
+        for row in self.persona.extras.filter(stat__category=self.extra.model).order_by('stat__key'):
+            ext = self.extra.stats_dict[row.stat.id]
+            new_stat = self.extra.stat.use(self, ext, row)
+            self.stats.append(new_stat)
+            self.stats_dict[ext.id] = new_stat
+            self.stats_dict[ext.name] = new_stat
+
+    def load_subs(self):
+        for sub in self.extra.subs:
+            new_sub = self.extra.use(self, sub, root=self.root, parent=self)
+            self.subs.append(new_sub)
+            self.subs_dict[new_sub.id] = new_sub
+            self.subs_name[new_sub.name] = new_sub
+
+    def extend(self, name=None):
+        return self.extra.extend(creator=self.character, name=name)
+
+    def create(self, name=None):
+        return self.extra.create(creator=self.character, name=name)
+
+    def add(self, name=None, value=None):
+        pass
+
+    def set(self, name=None, value=None):
+        pass
+
+    def remove(self, name=None, value=None):
+        pass
+
+    def clear(self, name=None, value=None):
+        pass
+
+    def delete(self):
+        """
+        This is called by a parent ExtraSet in some circumstances. Purges all child character data through calling
+        nested .delete() functions on contained objects.
+        :return:
+        """
+        for id in self.stats_dict.keys():
+            self.delete_stat(id)
+        for id in self.subs_dict.keys():
+            self.delete_sub(id)
+
+    def delete_sub(self, id):
+        """
+        Delete a sub-ExtraCharacterSet and everything it manages from the database.
+        :param id:
+        :return:
+        """
+        sub = self.subs_dict[id]
+        if sub:
+            sub.delete()
+            self.subs.remove(sub)
+            del self.subs_dict[id]
+
+    def delete_stat(self, id):
+        """
+        Delete a character's Stat and any Specialties (if they have any) by calling its .delete() function.
+        :param id:
+        :return:
+        """
+        stat = self.stats_dict[id]
+        if stat:
+            stat.delete()
+            self.stats.remove(stat)
+            del self.stats_dict[id]
+
+
 class CharacterExtra(object):
 
     def __init__(self, owner, extra, row):
@@ -11,6 +129,7 @@ class CharacterExtra(object):
         self.game = owner.game
         self.data = owner.data
         self.model = row
+        self.extra.users.append(self)
         self.load()
 
     def load(self):
@@ -21,6 +140,21 @@ class CharacterExtra(object):
 
     def name(self):
         return self.extra.name
+
+    def delete(self):
+        """
+        Hook called by any deletion from the ExtraSet subsystem. Ensures operation mirrored in CharacterExtras.
+        :return:
+        """
+        self.delete_extra()
+        self.model.delete()
+
+    def delete_extra(self):
+        """
+        Hook attribute to be called before primary deletion. Used mostly for Specialties.
+        :return:
+        """
+        pass
 
 
 class CharacterExtraStat(CharacterExtra):
@@ -50,10 +184,27 @@ class Extra(object):
         self.model = row
         self.name = str(row.key)
         self.id = int(row.id)
+        self.users = list()
         self.load()
 
     def load(self):
         pass
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return '<%s: %s>' % (self.owner.name, self.name)
+
+    def delete(self):
+        """
+        Calls the .delete() function on all player instances and cleans up the stat's Model. This is meant to be
+        called from the ExtraSet via its .delete_stat() method.
+        :return:
+        """
+        for user in self.users:
+            user.delete()
+        self.model.delete()
 
 
 class ExtraSpecialty(Extra):
@@ -82,21 +233,30 @@ class WordPower(Extra):
 
 
 class ExtraSet(object):
-    category_id = 0
-    sub_id = 0
     name = '<unknown>'
-    can_add = True
+    can_create = True
     can_take = True
     can_extend = False
-    sub_classes = ()
-    static_classes = ()
-    use = ExtraStat
+    use = CharacterExtraSet
+    stat = ExtraStat
     sub = None
     use_subs = False
     use_stats = True
+    created = False
+    sub_init = tuple()
+    stat_init = tuple()
 
-    def __init__(self, owner, root=None, model=None, sub_id=None, name=None):
+    def __repr__(self):
+        if not self.parent:
+            return '<%s: %s>' % (self.__class__.__name__, self.name)
+        return '<%s - %s>' % (self.owner.name, self.name)
+
+    def __init__(self, owner, root=None, model=None, name=None, parent=None):
+        self.users = list()
         self.owner = owner
+        self.parent = parent
+        if name:
+            self.name = name
         if not root:
             self.root = self
             self.data = owner
@@ -109,20 +269,19 @@ class ExtraSet(object):
             self.handler = owner.handler
         if model:
             self.model = model
-            self.sub_id = int(model.sub_id)
+            self.parent = model.parent
             self.name = str(model.key)
         else:
-            self.model, created = self.game.extras.get_or_create(category_id=self.category_id,
-                                                                 sub_id=self.sub_id, key=self.name)
-        if name:
-            self.name = name
-        if sub_id:
-            self.sub_id = sub_id
+            self.model, self.created = self.game.extras.get_or_create(parent=parent, key=self.name)
+        self.id = int(self.model.id)
         self.subs = list()
         self.subs_dict = dict()
         self.stats = list()
         self.stats_dict = dict()
         self.stats_name = dict()
+
+        if self.created:
+            self.load_init()
 
         if self.use_stats:
             self.load_stats()
@@ -131,25 +290,27 @@ class ExtraSet(object):
             self.load_subs()
 
     def load_stats(self):
-        self.stats = [self.use(self, row) for row in self.model.entries.all()]
+        self.stats = [self.stat(self, row) for row in self.model.entries.all()]
         self.stats_dict = {ent.id: ent for ent in self.stats}
         self.stats_name = {ent.name: ent for ent in self.stats}
 
     def load_subs(self):
-        rows = self.model.__class__.objects.filter(category_id=self.category_id)
+        rows = self.model.children.all().order_by('key')
         self.subs = [self.sub(self, root=self.root, model=row) for row in rows]
-        self.subs_dict = {sub.sub_id: sub for sub in self.subs}
-        self.subs_name = [self.use(self, row) for row in self.model.entries.all()]
+        self.subs_dict = {sub.id: sub for sub in self.subs}
+        self.subs_name = {sub.name: sub for sub in self.subs}
 
-    @property
-    def id(self):
-        return self.category_id
+    def load_init(self):
+        for sub in self.sub_init:
+            ent, created = self.model.children.get_or_create(game=self.game, key=sub)
+        for thing in self.stat_init:
+            th, created = self.model.entries.get_or_create()
 
     def __str__(self):
         return self.name
 
-    def add(self, creator, name=None):
-        if not self.can_add:
+    def create(self, creator, name=None):
+        if not self.can_create:
             raise ValueError("Cannot add entries to %s!" % self.name)
         if not name:
             raise ValueError("No name entered!")
@@ -157,7 +318,7 @@ class ExtraSet(object):
         if self.model.entries.filter(key__iexact=name).count():
             raise ValueError("Name is already in use!")
         new_mod = self.model.entries.create(creator=creator, key=name)
-        new_stat = self.use(self, new_mod)
+        new_stat = self.stat(self, new_mod)
         self.stats.append(new_stat)
         self.stats_dict[new_stat.id] = new_stat
         self.stats_name[name] = new_stat
@@ -169,47 +330,70 @@ class ExtraSet(object):
         if not name:
             raise ValueError("No name entered!")
         name = dramatic_capitalize(sanitize_string(name))
-        old_ids = self.model.__class__.objects.filter(category_id=self.category_id).values_list('sub_id', flat=True)
-        new_id = max(old_ids) + 1
-        new_mod = self.model.__class__.objects.create(category_id=self.category_id, sub_id=new_id, key=name)
+        new_mod = self.model.children.create(game=self.game, key=name)
         new_sub = self.sub(self, root=self.root, model=new_mod)
         self.subs.append(new_sub)
         self.subs_dict[new_sub.sub_id] = new_sub
         self.subs_name[name] = new_sub
         return new_sub
 
+    def delete(self):
+        """
+        Used to delete an ExtraSet from the database including all player data. Intended to be called from a
+        parent ExtraSet.
+        :return:
+        """
+        for user in self.users:
+            user.delete()
+        for id in self.stats_dict.keys():
+            self.delete_stat(id)
+        for id in self.subs_dict.keys():
+            self.delete_sub(id)
+        self.model.delete()
 
+    def delete_sub(self, id):
+        """
+        Deletes a whole sub-ExtraSet and removes it and everything it contains from the database and players.
+        :return:
+        """
+        sub = self.subs_dict[id]
+        if sub:
+            sub.delete()
+            del self.subs_dict[id]
+            self.subs.remove(sub)
+
+    def delete_stat(self, id):
+        """
+        Deletes a Stat's Model and removes it from the ExtraSet. This propogates to all Character instances and
+        the database so be careful!
+        :param id:
+        :return:
+        """
+        stat = self.stats_dict[id]
+        if stat:
+            stat.delete()
+            del self.stats_dict[id]
+            self.stats.remove(stat)
 
 class MutableSet(ExtraSet):
-    can_add = True
+    can_create = True
 
 
 class MeritSet(MutableSet):
     category_id = 1
     sub_id = 0
     name = 'Merits'
-    use = ExtraMerit
+    stat = ExtraMerit
 
 
 class SubManager(ExtraSet):
-    can_add = False
+    can_create = False
     use_subs = True
     can_take = False
     use_stats = False
 
 
-class StaticSet(ExtraSet):
-    category_id = 2
-    name = 'Extras'
-    can_add = False
-
-    def load_stats(self):
-        self.stats = [sta(self) for sta in self.static_classes]
-        self.stats_dict = {sta.id: sta for sta in self.stats}
-        self.stats_name = {sta.name: sta for sta in self.stats}
-
-
 class WordSet(ExtraSet):
     category_id = 3
     name = 'Words'
-    use = WordPower
+    stat = WordPower

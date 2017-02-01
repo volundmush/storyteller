@@ -103,8 +103,9 @@ class GameData(object):
         self.z_splats_dict = {}
 
     def prepare_extra(self):
+        self.root_dict = dict()
         self.extras = [ex(self) for ex in self.load_extra]
-        self.extras_dict = {(ex.category_id, ex.sub_id): ex for ex in self.extras}
+        self.extras_dict = {ex.id: ex for ex in self.extras}
         self.extras_name = {ex.name: ex for ex in self.extras}
 
     def prepare_pools(self):

@@ -7,6 +7,8 @@ class Handler(object):
 
     def __init__(self, owner):
         self.owner = owner
+        self.character = owner.character
+        self.persona = owner.persona
         self.handler = owner
         self.data = owner.data
         self.game = owner.game
@@ -104,7 +106,11 @@ class PoolHandler(Handler):
 
 
 class ExtraHandler(Handler):
-    pass
+
+    def load(self):
+        self.extras = [ex.use(self, ex, root=self) for ex in self.data.extras]
+        self.extras_dict = {ex.id: ex for ex in self.extras}
+        self.extras_name = {ex.name: ex for ex in self.extras}
 
 
 class StorytellerHandler(object):
@@ -120,6 +126,7 @@ class StorytellerHandler(object):
 
     def __init__(self, owner):
         self.owner = owner
+        self.character = owner
         self.game = self.data.game
 
         for prep in (self.prepare_template, self.prepare_stats, self.prepare_sheet, self.prepare_extras,
