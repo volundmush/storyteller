@@ -16,7 +16,6 @@ class SheetSection(object):
         self.handler = owner.handler
         self.game = owner.game
         self.data = owner.data
-        self.colors = self.handler.template.template.colors
         self.load()
 
     def __str__(self):
@@ -28,6 +27,10 @@ class SheetSection(object):
     def __repr__(self):
         return '<SheetSection: %s>' % self.name
 
+    @property
+    def colors(self):
+        return self.handler.template.template.template.colors
+
     def load(self):
         pass
 
@@ -36,15 +39,15 @@ class SheetSection(object):
 
     def header(self, center_text=None, width=80):
         colors = self.colors
-        start_char = ANSIString('{%s}{n' % colors['border'])
-        end_char = ANSIString('{%s{{{n' % colors['border'])
+        start_char = ANSIString('|%s}|n' % colors['border'])
+        end_char = ANSIString('|%s{|n' % colors['border'])
         if not center_text:
             center_section = '-' * (width - 2)
-            center_section = ANSIString('{%s%s{n' % (colors['border'], center_section))
+            center_section = ANSIString('|%s%s|n' % (colors['border'], center_section))
         else:
             show_width = width - 2
-            fill = ANSIString('{%s-{n' % colors['border'])
-            center_section = ANSIString('{%s/{n{%s%s{n{%s/{n' % (colors['slash'], colors['section_name'], center_text,
+            fill = ANSIString('|%s-|n' % colors['border'])
+            center_section = ANSIString('|%s/|n|%s%s|n|%s/|n' % (colors['slash'], colors['section_name'], center_text,
                                                                  colors['slash'])).center(show_width, fill)
         return start_char + center_section + end_char
 
@@ -53,22 +56,22 @@ class SheetSection(object):
             display_text = ['', '', '']
         colors = self.colors
         col_widths = self.calculate_widths(width-2)
-        fill = ANSIString('{%s-{n' % colors['border'])
+        fill = ANSIString('|%s-|n' % colors['border'])
         sections = list()
         for count, header in enumerate(display_text):
-            center_text = ANSIString('{%s/{n{%s%s{n{%s/{n' % (colors['slash'], colors['section_name'], header,
+            center_text = ANSIString('|%s/|n|%s%s|n|%s/|n' % (colors['slash'], colors['section_name'], header,
                                                               colors['slash'])).center(col_widths[count], fill)
             sections.append(center_text)
 
-        start_char = ANSIString('{%s}{n' % colors['border'])
-        end_char = ANSIString('{%s{{{n' % colors['border'])
+        start_char = ANSIString('|%s}|n' % colors['border'])
+        end_char = ANSIString('|%s{|n' % colors['border'])
         return start_char + sections[0] + sections[1] + sections[2] + end_char
 
     def border(self, display_text=None, width=80):
         colors = self.colors
         ev_table = EvTable(border='cols', pad_width=0, valign='t',
-                           border_left_char=ANSIString('{%s|{n' % colors['border']),
-                           border_right_char=ANSIString('{%s|{n' % colors['border']), header=False)
+                           border_left_char=ANSIString('|%s|' % colors['border']),
+                           border_right_char=ANSIString('|%s|' % colors['border']), header=False)
         ev_table.add_row(display_text, width=width)
         return ev_table
 
@@ -77,8 +80,8 @@ class SheetSection(object):
             display_text = ['', '', '']
         colors = self.colors
         ev_table = EvTable(border='cols', pad_width=0, valign='t',
-                           border_left_char=ANSIString('{%s|{n' % colors['border']),
-                           border_right_char=ANSIString('{%s|{n' % colors['border']), header=False)
+                           border_left_char=ANSIString('|%s|' % colors['border']),
+                           border_right_char=ANSIString('|%s|' % colors['border']), header=False)
         ev_table.add_row(display_text[0], display_text[1], display_text[2])
 
         for count, col_width in enumerate(self.calculate_widths(width=width)):
@@ -90,8 +93,8 @@ class SheetSection(object):
             display_text = ['', '']
         colors = self.colors
         ev_table = EvTable(border='cols', pad_width=0, valign='t',
-                           border_left_char=ANSIString('{%s|{n' % colors['border']),
-                           border_right_char=ANSIString('{%s|{n' % colors['border']), header=False)
+                           border_left_char=ANSIString('|%s||n' % colors['border']),
+                           border_right_char=ANSIString('|%s||n' % colors['border']), header=False)
         ev_table.add_row(display_text[0], display_text[1])
 
         for count, col_width in enumerate(self.calculate_double(width=width)):

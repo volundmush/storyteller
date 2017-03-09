@@ -16,6 +16,21 @@ class CharacterTemplate(object):
     def __int__(self):
         return self.template.id
 
+    @property
+    def willpower(self):
+        return self.template.willpower
+
+    @property
+    def options(self):
+        msg = list()
+        if self.template.x_name:
+            msg.append((self.template.x_name, ', '.join([str(cla) for cla in self.template.x_choices])))
+        if self.template.y_name:
+            msg.append((self.template.y_name, ', '.join([str(cla) for cla in self.template.y_choices])))
+        if self.template.z_name:
+            msg.append((self.template.z_name, ', '.join([str(cla) for cla in self.template.z_choices])))
+        return msg
+
 
 class Template(object):
     name = '<Unknown>'

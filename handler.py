@@ -1,9 +1,18 @@
 from __future__ import unicode_literals
 
+from athanor.utils.text import partial_match
+
 class Handler(object):
     """
     Not meant to be used directly. Parent Class for all StorytellerHandler Sections!
     """
+    name = 'Handler'
+    can_set = True
+    can_add = True
+    can_remove = True
+    can_create = True
+    can_clear = True
+
 
     def __init__(self, owner):
         self.owner = owner
@@ -29,11 +38,87 @@ class Handler(object):
         """
         pass
 
+    def __str__(self):
+        return self.name
+
+    def menu_display(self, viewer):
+        pass
+
+
+class TemplateHandler(Handler):
+    name = 'Template'
+    can_add = False
+    can_remove = False
+    can_create = False
+
+    def __init__(self, owner):
+        self.owner = owner
+        self.character = owner.character
+        self.handler = owner
+        self.data = owner.data
+        self.game = self.data.game
+        pers = self.game.personas.filter(character=self.character).first()
+        if not pers:
+            pers = self.game.personas.create(character=self.character, key=self.character.key)
+        self.persona = pers
+        self.owner.persona = pers
+        tem = self.data.templates_dict[pers.template]
+        self.template = tem.use(self, tem, pers)
+        self.load()
+        self.load_extra()
+
+    def set(self, name=None, value=None):
+        options = {'Template': self.set_template}
+        if not name:
+            raise ValueError("What will you set?")
+        found = partial_match(name, options.keys())
+        if found:
+            return options[found](value)
+        return self.template.set(name, value)
+
+    def set_template(self, value=None):
+        choices = self.data.templates
+        if not value:
+            raise ValueError("What Template will you use? Choices are: %s" % ', '.join([str(tem) for tem in choices]))
+        tem = partial_match(value, choices)
+        if not tem:
+            raise ValueError("Template not found. Choices are: %s" % ', '.join([str(tem) for tem in choices]))
+        self.persona.template = tem.id
+        self.persona.save(update_fields=['template'])
+        self.template = tem.use(self, tem, self.persona)
+        return "Template Changed to: %s" % tem
+
+    def menu_display(self, viewer):
+        message = list()
+        message.append(viewer.player.render.header('%s - Sheet Template' % (self.character.key)))
+        start_table = viewer.player.render.make_table(['Options', 'Choices'], width=[24, 56])
+        start_table.add_row('Template', ', '.join([str(tem) for tem in self.data.templates]))
+        for op in self.template.options:
+            start_table.add_row(op[0], op[1])
+        message.append(start_table)
+        message.append(viewer.player.render.separator('Commands'))
+        mode_table = viewer.player.render.make_table(['Cmd', 'Explanation'], width=[24, 56])
+        cmds = (
+            ('mode <type>', "Change current editing mode!"),
+            ('set <option>=<value>', "Change an above property. Example: set Template=Mortal"),
+            ('sheet', 'Display current progress'),
+            ('menu', "Display this help menu."),
+            ('finish', "Leave editor.")
+        )
+        for cmd in cmds:
+            mode_table.add_row(cmd[0], cmd[1])
+        message.append(mode_table)
+        message.append(viewer.player.render.footer())
+        return message
+
 class StatHandler(Handler):
     """
     Object responsible for storing, sorting, readying and managing the Stats (Abilities, Attributes, Advantages,
     etc). Component of StorytellerHandler.
     """
+    name = 'Stats'
+    can_create = False
+    can_clear = False
 
     def load(self):
         self.owner.persona.stats.all().exclude(id__in=self.data.stats_dict.keys()).delete()
@@ -42,6 +127,8 @@ class StatHandler(Handler):
             self.load_defaults()
             stats = self.owner.persona.stats.all()
         all_stats = list()
+        self.specialties = list()
+        self.roll = list()
         for row in stats:
             proto = self.data.stats_dict[row.stat_id]
             new_stat = proto.use(self, proto, row)
@@ -81,6 +168,36 @@ class StatHandler(Handler):
             stat = self.data.stats_dict[id]
             new = self.owner.persona.stats.create(stat_id=stat.id, rating=stat.default)
 
+    def set(self, name=None, value=None):
+        choices = self.stats
+        choice_names = ', '.join([str(ch) for ch in choices])
+        if not name:
+            raise ValueError("What will you set? Choices are: %s" % choice_names)
+        found = partial_match(name, choices)
+        if not found:
+            raise ValueError("Stat not found! Choices are: %s" % choice_names)
+        return found.set(value)
+
+    def menu_display(self, viewer):
+        message = list()
+        message.append(viewer.player.render.header('%s - Sheet Stats' % (self.character.key)))
+        start_table = viewer.player.render.make_table(['Options', 'Choices'], width=[24, 56])
+        start_table.add_row('Stats', ', '.join([str(stat) for stat in self.data.stats]))
+        message.append(start_table)
+        message.append(viewer.player.render.separator('Commands'))
+        mode_table = viewer.player.render.make_table(['Cmd', 'Explanation'], width=[24, 56])
+        cmds = (
+            ('mode <type>', "Change current editing mode!"),
+            ('set <stat>=<value>', "Change an above property. Example: set Strength=3"),
+            ('sheet', 'Display current progress'),
+            ('menu', "Display this help menu."),
+            ('finish', "Leave editor.")
+        )
+        for cmd in cmds:
+            mode_table.add_row(cmd[0], cmd[1])
+        message.append(mode_table)
+        message.append(viewer.player.render.footer())
+        return message
 
 class SheetHandler(Handler):
     """
@@ -119,6 +236,7 @@ class StorytellerHandler(object):
     interface for all commands and database functions.
     """
     data = None
+    template_handler = TemplateHandler
     stat_handler = StatHandler
     sheet_handler = SheetHandler
     pool_handler = PoolHandler
@@ -134,12 +252,7 @@ class StorytellerHandler(object):
             prep()
 
     def prepare_template(self):
-        pers = self.game.personas.filter(character=self.owner).first()
-        if not pers:
-            pers = self.game.personas.create(character=self.owner, key=self.owner.key)
-        self.persona = pers
-        tem = self.data.templates_dict[pers.template]
-        self.template = tem.use(self, tem, pers)
+        self.template = self.template_handler(self)
 
     def prepare_stats(self):
         self.stats = self.stat_handler(self)

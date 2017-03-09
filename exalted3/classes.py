@@ -7,5 +7,5 @@ from storyteller.exalted3.handler import Ex3Handler
 class Ex3Character(StorytellerCharacter):
 
     @lazy_property
-    def ex3(self):
+    def story(self):
         return Ex3Handler(self)

@@ -1,11 +1,8 @@
 from __future__ import unicode_literals
-from athanor.utils.text import dramatic_capitalize, sanitize_string
+from athanor.utils.text import dramatic_capitalize, sanitize_string, partial_match
 
 
 class CharacterExtraSet(object):
-    add_increases_quantity = False
-    set_is_add = False
-    on_zero_remove = False
 
     def __init__(self, owner, extra, root=None, parent=None):
         self.character = owner.character
@@ -23,6 +20,7 @@ class CharacterExtraSet(object):
         self.stats = list()
         self.stats_dict = dict()
         self.stats_name = dict()
+        self.confirm_delete = None
 
         if self.extra.use_stats:
             self.load_stats()
@@ -73,13 +71,76 @@ class CharacterExtraSet(object):
         return self.extra.create(creator=self.character, name=name)
 
     def add(self, name=None, value=None):
-        pass
+        choices = self.extra.stats
+        if not name:
+            raise ValueError("What will you set? Your choices are: %s" % ', '.join(choices))
+        stat = partial_match(name, choices)
+        if not stat and self.extra.can_create:
+            raise ValueError("That stat is not available, but can be created.")
+        elif not stat and not self.extra.can_create:
+            raise ValueError("That stat is not available. Your choices are: %s" % ', '.join(choices))
+        val = stat.validate_set(value)
+        my_stat = self.stats_dict.get(stat.id, None)
+        if not val and my_stat is None:
+            raise ValueError("There's no point in adding a Stat at zero.")
+        if not my_stat:
+            my_stat = self.add_stat(stat)
+        return my_stat.add(val)
 
     def set(self, name=None, value=None):
-        pass
+        if self.extra.set_is_add:
+            return self.add(name, value)
+        choices = self.extra.stats
+        if not name:
+            raise ValueError("What will you set? Your choices are: %s" % ', '.join(choices))
+        stat = partial_match(name, choices)
+        if not stat and self.extra.can_create:
+            raise ValueError("That stat is not available, but can be created.")
+        elif not stat and not self.extra.can_create:
+            raise ValueError("That stat is not available. Your choices are: %s" % ', '.join(choices))
+        val = stat.validate_set(value)
+        my_stat = self.stats_dict.get(stat.id, None)
+        if not val and my_stat is None:
+            raise ValueError("There's no point in adding a Stat at zero.")
+        if not my_stat:
+            my_stat = self.add_stat(stat)
+        if not val and self.extra.set_zero_is_remove:
+            if not self.confirm_delete is my_stat and self.extra.confirm_remove:
+                self.confirm_delete = my_stat
+                return "This will remove %s. To confirm, enter the command again." % my_stat
+            message = "Deleted %s." % my_stat
+            self.delete_stat(my_stat.id)
+            del my_stat
+            if self.extra.clear_unused_stats and not stat.model.users.count():
+                self.extra.delete_stat(stat.id)
+            return message
+        return my_stat.set(val)
+
+    def add_stat(self, stat):
+        new_mod, created = self.persona.extras.get_or_create(stat=stat.model)
+        new_stat = self.extra.stat.use(self, stat, new_mod)
+        self.stats.append(new_stat)
+        self.stats_dict[stat.id] = new_stat
+        self.stats_name[stat.name] = new_stat
+        return new_stat
+
 
     def remove(self, name=None, value=None):
-        pass
+        choices = self.extra.stats
+        if not name:
+            raise ValueError("What will you set? Your choices are: %s" % ', '.join(choices))
+        stat = partial_match(name, choices)
+        if not stat and self.extra.can_create:
+            raise ValueError("That stat is not available, but can be created.")
+        elif not stat and not self.extra.can_create:
+            raise ValueError("That stat is not available. Your choices are: %s" % ', '.join(choices))
+        val = stat.validate_set(value)
+        my_stat = self.stats_dict.get(stat.id, None)
+        if not val and my_stat is None:
+            raise ValueError("There's no point in adding a Stat at zero.")
+        if not my_stat:
+            my_stat = self.add_stat(stat)
+        return my_stat.add(val)
 
     def clear(self, name=None, value=None):
         pass
@@ -138,6 +199,7 @@ class CharacterExtra(object):
     def __str__(self):
         return self.name
 
+    @property
     def name(self):
         return self.extra.name
 
@@ -158,7 +220,42 @@ class CharacterExtra(object):
 
 
 class CharacterExtraStat(CharacterExtra):
-    pass
+    can_specialty = False
+
+    def load(self):
+        self.rating = int(self.model.rating)
+
+        if self.can_specialty:
+            self.load_specialties()
+
+        # For if even normal load is not enough.
+        self.load_extra()
+
+    def load_extra(self):
+        # Just a hook in case this is needed...
+        pass
+
+    def load_specialties(self):
+        pass
+
+    def set(self, value=None):
+        if value is None:
+            raise ValueError("Must enter a value!")
+        try:
+            val = int(value)
+        except ValueError:
+            raise ValueError("Must enter a number.")
+        if val < 0:
+            raise ValueError("A positive whole number.")
+
+        self.rating = val
+        self.model.rating = val
+        self.model.save(update_fields=['rating'])
+        return "%s is now rated at: %s" % (self.name, val)
+
+
+    def __int__(self):
+        return self.rating
 
 
 class CharacterExtraSpecialty(CharacterExtraStat):
@@ -211,25 +308,33 @@ class ExtraSpecialty(Extra):
     use = CharacterExtraSpecialty
 
 
-class CharacterExtraStat(Extra):
-
-    def load(self):
-        self.rating = int(self.model.rating)
-
-
-class ExtraMerit(Extra):
-    use = CharacterMerit
-
-
 class ExtraStat(Extra):
     use = CharacterExtraStat
     specialty = ExtraSpecialty
     lowest = 0
     highest = 10
 
+    def validate_set(self, value=None):
+        if value is None:
+            raise ValueError("You did not enter a value to set it to!")
+        try:
+            val = int(value)
+        except ValueError:
+            raise ValueError("You must enter a number value!")
+        if val < 0:
+            raise ValueError("A stat cannot be set negative...")
+        if val < self.lowest or val > self.highest:
+            raise ValueError("Must be between %s and %s." % (self.lowest, self.highest))
+        return val
 
-class WordPower(Extra):
-    pass
+
+class ExtraMerit(Extra):
+    use = CharacterMerit
+
+
+
+class WordPower(CharacterExtraStat):
+    specialty = None
 
 
 class ExtraSet(object):
@@ -245,6 +350,16 @@ class ExtraSet(object):
     created = False
     sub_init = tuple()
     stat_init = tuple()
+
+    confirm_remove = False
+    add_increases_quantity = False
+    set_is_add = False
+    set_zero_is_remove = False
+    clear_unused_stats = False
+    can_add = False
+    can_set = True
+    can_clear = True
+    can_remove = True
 
     def __repr__(self):
         if not self.parent:
@@ -375,13 +490,16 @@ class ExtraSet(object):
             del self.stats_dict[id]
             self.stats.remove(stat)
 
+
 class MutableSet(ExtraSet):
     can_create = True
+    can_add = False
+    can_set = True
+    set_zero_is_remove = True
+    clear_unused_stats = True
 
 
 class MeritSet(MutableSet):
-    category_id = 1
-    sub_id = 0
     name = 'Merits'
     stat = ExtraMerit
 
@@ -394,6 +512,5 @@ class SubManager(ExtraSet):
 
 
 class WordSet(ExtraSet):
-    category_id = 3
     name = 'Words'
     stat = WordPower

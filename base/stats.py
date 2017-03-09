@@ -11,6 +11,7 @@ class CharacterSpecialty(object):
         self.model = model
         self.specialty = proto
         self.rating = int(model.rating)
+        self.owner.owner.specialties.append(self)
 
     @property
     def name(self):
@@ -40,6 +41,7 @@ class CharacterStat(object):
         self.flag_2 = int(model.flag_2)
         self.specialties = list()
         self.specialties_dict = dict()
+        self.owner.roll.append(self)
         if self.specialty:
             for row in self.handler.persona.specialties.filter(specialty__stat_id=self.id):
                 proto = self.stat.specialties_dict[row.specialty.id]
@@ -105,6 +107,7 @@ class CharacterStat(object):
         self.rating = val
         if old != val:
             self.save()
+        return "%s Set to: %s" % (self.name, val)
 
     @property
     def display_name(self):

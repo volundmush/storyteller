@@ -23,6 +23,7 @@ class Solar(_Exalt):
     id = 2
     name = 'Solar'
     x_classes = ALL_SOLAR_X
+    tem_colors = {'border': 'y'}
 
 
 class Abyssal(_Exalt):
