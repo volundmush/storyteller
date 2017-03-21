@@ -220,3 +220,18 @@ class Stat(object):
         self.specialties.append(new_spec)
         self.specialties_dict[new_mod.id] = new_spec
         return new_spec
+
+    def qualify(self, checker):
+        """
+        This Method will be called on all Stats in a game to decide which ones players should load. It is meant to be
+        overloaded depending on the stat. For instance, Vampire Disciplines (World of Darkness) should return true if
+        checker is a vampire OR a Ghoul. The base Stat returns true for everyone.
+
+        Args:
+            checker: a StorytellerHandler instance.
+
+        Returns:
+            Bool - Whether checker qualifies for this Stat.
+
+        """
+        return True

@@ -1,5 +1,4 @@
 from django.db import models
-from athanor.core.models import WithKey
 
 
 class Game(models.Model):
@@ -7,7 +6,7 @@ class Game(models.Model):
     This Model is used to seperate one game (Exalted 3, Chronicles of Darkness, etc) from another. This allows the
     single running database to potentially service multiple games.
     """
-    key = models.CharField(max_length=255, db_index=True, unique=True)
+    name = models.CharField(max_length=255, db_index=True, unique=True)
 
 
 class WithDotValue(models.Model):
@@ -31,7 +30,7 @@ class Persona(models.Model):
             things like Werewolf Auspice or Vampire Clan. Y and Z are for Chronicles other subtypes.
     """
     game = models.ForeignKey('storyteller.Game', related_name='personas')
-    key = models.CharField(max_length=255, db_index=True)
+    name = models.CharField(max_length=255, db_index=True)
     parent = models.ForeignKey('storyteller.Persona', null=True, default=None, related_name='children')
     character = models.ForeignKey('objects.ObjectDB', related_name='personas')
     template = models.PositiveSmallIntegerField(default=1)
@@ -50,16 +49,16 @@ class Persona(models.Model):
 
 
 class Trait(models.Model):
+    """
+    Sometimes a Template has other things that need to be answered. For instance, Lunars in Exalted have a
+    'Totem Animal' field and Abyssals might have a 'Liege' field.
+    """
     persona = models.ForeignKey('storyteller.Persona', related_name='traits')
     trait_id = models.PositiveIntegerField(default=0)
-    answer = models.ForeignKey('storyteller.TraitAnswer', related_name='trait_characters')
+    value = models.CharField(max_length=255)
 
     class Meta:
         unique_together = (('trait_id', 'persona'),)
-
-
-class TraitAnswer(WithKey):
-    pass
 
 
 class Stat(WithDotValue):
@@ -75,64 +74,55 @@ class Stat(WithDotValue):
         unique_together = (('persona', 'stat_id',),)
 
 
-class SpecialtyName(models.Model):
+class Specialty(WithDotValue):
     """
     Model is used for storing the names of Specialties so that if two Characters have the same specialty,
     it only exists once in the database.
     """
-    game = models.ForeignKey('storyteller.Game', related_name='specialties')
-    stat_id = models.PositiveIntegerField(default=0)
-    key = models.CharField(max_length=255, db_index=True)
-    creator = models.ForeignKey('objects.ObjectDB', related_name='+')
-    date_created = models.DateTimeField(auto_now_add=True)
+    stat = models.ForeignKey('storyteller.Stat', related_name='specialties')
+    name = models.CharField(max_length=255, db_index=True)
 
     class Meta:
-        unique_together = (('game', 'stat_id', 'key'),)
+        unique_together = (('stat', 'key'),)
 
 
-class Specialty(WithDotValue):
+class Custom(WithDotValue):
     """
-    Model for storing Character-specific Specialty data.
+    This Model exists for any kind of straightforward Stat-like trait where the name is up to the player, but it behaves
+    like other Stats. Examples include specific Crafts from Exalted 3e. The Category # determines what kind of Custom
+    Stat it is.
     """
-    persona = models.ForeignKey('storyteller.Persona', related_name='specialties')
-    specialty = models.ForeignKey('storyteller.SpecialtyName', related_name='users')
+    persona = models.ForeignKey('storyteller.Persona', related_name='customs')
+    category = models.PositiveSmallIntegerField(default=0)
+    name = models.CharField(max_length=255, db_index=True)
 
     class Meta:
-        unique_together = (('specialty', 'persona'),)
+        unique_together = (('persona', 'category', 'name'),)
 
 
-class ExtraSet(models.Model):
-    game = models.ForeignKey('storyteller.Game', related_name='extras', null=True, default=None)
-    parent = models.ForeignKey('storyteller.ExtraSet', null=True, default=None, related_name='children')
-    key = models.CharField(max_length=255, db_index=True)
-    creator = models.ForeignKey('objects.ObjectDB', related_name='+', null=True, default=None)
-    date_created = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = (('game', 'parent', 'key'),)
-
-
-class ExtraName(models.Model):
-    category = models.ForeignKey('storyteller.ExtraSet', related_name='entries', null=True, default=None)
-    key = models.CharField(max_length=255, db_index=True)
-    parent = models.ForeignKey('storyteller.ExtraName', null=True, default=None, related_name='specialties')
-    creator = models.ForeignKey('objects.ObjectDB', related_name='+', null=True, default=None)
-    date_created = models.DateTimeField(auto_now_add=True)
+class CustomSpecialty(WithDotValue):
+    """
+    Implements Specialties for Custom Stats. Same as other Specialties.
+    """
+    stat = models.ForeignKey('storyteller.Custom', related_name='specialties')
+    name = models.CharField(max_length=255, db_index=True)
 
     class Meta:
-        unique_together = (('category', 'key', 'parent'),)
+        unique_together = (('stat', 'name'),)
 
 
-class Extra(WithDotValue):
-    persona = models.ForeignKey('storyteller.Persona', related_name='extras')
-    stat = models.ForeignKey('storyteller.ExtraName', related_name='users')
+class Merit(WithDotValue):
+    """
+    Model to contain all Merit and Merit-like traits for a character, such as Flaws and Backgrounds.
+    """
+    persona = models.ForeignKey('storyteller.Persona', related_name='merits')
+    merit_id = models.PositiveIntegerField(default=0, db_index=True)
     context = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
-    many = models.TextField(null=True, blank=True)
 
     class Meta:
-        unique_together = (('persona', 'stat', 'context'),)
+        unique_together = (('persona', 'category', 'merit_id', 'context'),)
 
 
 class Pool(models.Model):
@@ -146,8 +136,28 @@ class Pool(models.Model):
 
 class PoolCommit(models.Model):
     pool = models.ForeignKey('storyteller.Pool', related_name='commits')
-    key = models.CharField(max_length=255, db_index=True)
+    name = models.CharField(max_length=255, db_index=True)
     value = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = (('pool', 'key'),)
+
+
+class Power(WithDotValue):
+    """
+    Model to contain save data for all special powers in use. Example Word-powers would be Exalted Charms and Spells.
+    There is some conceptual overlap with the Stat model here, because traits like 'Vampire Disciplines' could be
+    stored here too. (They are not, they are considered Stats.) This is intended for powers which might have data that
+    the Stat model cannot accomodate.
+
+    The 'rating' field from WithDotValue is used for various purposes, but usually 'how many times have you purchased
+    this power.'
+
+    'Description' and 'Notes' are there for certain powers which go above and beyond even the needs of a 'rating',
+    although those are rare. Examples include Werewolf Shadow Gifts and certain Exalted Charms with sub-powers. Storing
+    JSON data allows these fields to be whatever they need to be.
+    """
+    persona = models.ForeignKey('storyteller.Persona', related_name='wordpowers')
+    power_id = models.PositiveIntegerField(default=0, db_index=True)
+    description = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
