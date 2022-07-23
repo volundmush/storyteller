@@ -1,224 +1,91 @@
-from __future__ import unicode_literals
-from storyteller.base.stats import CharacterStat
-from storyteller.base.data import PhysicalAttribute, SocialAttribute, MentalAttribute, Stat, PowerStat, Willpower as OldWillpower
+from django.conf import settings
 
-class CharacterCraft(CharacterStat):
-    pass
+from storyteller.stats import StatManager
+from storyteller.exceptions import StoryDBException
 
+from athanor.utils import partial_match
 
-# Advantages
-class Essence(PowerStat):
-    name = 'Essence'
+_ATTRIBUTES = ["Strength", "Dexterity", "Stamina", "Charisma", "Manipulation", "Appearance", "Perception",
+               "Intelligence", "Wits"]
 
+_ATTRIBUTES_CAT = {
+    "physical": ["Strength", "Dexterity", "Stamina"],
+    "social": ["Charisma", "Manipulation", "Appearance"],
+    "mental": ["Perception", "Intelligence", "Wits"]
+}
 
-class Willpower(OldWillpower):
-    pass
 
+class Attributes(StatManager):
+    ops = ["set", "favor"]
 
-ALL_ADVANTAGES = (Essence, Willpower)
+    def get_attributes(self):
+        return list(_ATTRIBUTES)
 
-# Attributes
+    def find_attr(self, target, path: list[str], op_name):
+        if not len(path) >= 1:
+            raise StoryDBException(f"No Attribute entered to {op_name}!")
+        if not (found := partial_match(path[0], self.get_attributes())):
+            raise StoryDBException(f"No Attribute called '{path[0]}'")
+        return found
 
-class Strength(PhysicalAttribute):
-    id = 3
-    name = 'Strength'
-    list_order = 1
+    def set(self, user, target, path: list[str], value: int = 1):
+        found = self.find_attr(target, path, "set")
+        row = self.stat_row(["Attributes", found])
+        self.set_int(target, row, value=value)
 
+    def favor(self, user, target, path, value: int = 1):
+        # Todo: Only Lunars can Attribute favor. Put a restriction in.
+        found = self.find_attr(target, path, "favor")
+        row = self.stat_row(["Attributes", found])
+        self.set_flag_1(target, row, value=value)
 
-class Dexterity(PhysicalAttribute):
-    id = 4
-    name = 'Dexterity'
-    list_order = 2
 
+_ABILITIES = ["Archery", "Athletics", "Awareness", "Bureaucracy", "Craft", "Dodge", "Integrity", "Investigation",
+              "Larceny", "Linguistics", "Lore", "Martial Arts", "Medicine", "Melee", "Occult", "Performance",
+              "Presence", "Resistance", "Ride", "Sail", "Socialize", "Stealth", "Survival", "Thrown", "War"]
 
-class Stamina(PhysicalAttribute):
-    id = 5
-    name = 'Stamina'
-    list_order = 3
 
+class Abilities(StatManager):
+    ops = ["set", "favor"]
+    not_settable = ["Craft", ]
 
-class Charisma(SocialAttribute):
-    id = 6
-    name = 'Charisma'
-    list_order = 1
+    def get_abilities(self):
+        return list(_ABILITIES)
 
+    def find_abil(self, target, path: list[str], op_name):
+        if not len(path) >= 1:
+            raise StoryDBException(f"No Ability entered to {op_name}!")
+        if not (found := partial_match(path[0], self.get_abilities())):
+            raise StoryDBException(f"No Ability called '{path[0]}'")
+        return found
 
-class Manipulation(SocialAttribute):
-    id = 7
-    name = 'Manipulation'
-    list_order = 2
+    def set(self, user, target, path: list[str], value: int = 1):
+        found = self.find_abil(target, path, "set")
+        if found in self.not_settable:
+            raise StoryDBException(f"{found} cannot be set directly as an Ability.")
+        row = self.stat_row(["Abilities", found])
+        self.set_int(target, row, value=value)
 
+    def favor(self, user, target, path, value: int = 1):
+        found = self.find_abil(target, path, "favor")
+        row = self.stat_row(["Abilities", found])
+        self.set_flag_1(target, row, value=value)
 
-class Appearance(SocialAttribute):
-    id = 8
-    name = 'Appearance'
-    list_order = 3
 
+class Specialties(Abilities):
+    ops = ["set"]
 
-class Perception(MentalAttribute):
-    id = 9
-    name = 'Perception'
-    list_order = 1
+    def find_spec(self, target, path: list[str], op_name):
+        if not len(path) >= 1:
+            raise StoryDBException(f"No Stat entered to {op_name}!")
+        available = self.get_abilities()
+        # TODO: add support for Attribute specialties if character supports it.
+        if not (found := partial_match(path[0], available)):
+            raise StoryDBException(f"No specializable stat called '{path[0]}'")
+        return found
 
+    def set(self, user, target, path: list[str], value: int = 1):
+        found = self.find_spec(target, path, "specialize")
 
-class Intelligence(MentalAttribute):
-    id = 10
-    name = 'Intelligence'
-    list_order = 2
-
-
-class Wits(MentalAttribute):
-    id = 11
-    name = 'Wits'
-    list_order = 3
-
-
-ALL_ATTRIBUTES = (Strength, Stamina, Dexterity, Charisma, Manipulation, Appearance, Intelligence, Wits, Perception)
-
-
-class _Ability(Stat):
-    category = 'Ability'
-    can_purchase = True
-    can_specialize = True
-    can_roll = True
-
-
-class Archery(_Ability):
-    id = 100
-    name = 'Archery'
-
-
-class Athletics(_Ability):
-    id = 101
-    name = 'Athletics'
-
-
-class Awareness(_Ability):
-    id = 102
-    name = 'Awareness'
-
-
-class Brawl(_Ability):
-    id = 103
-    name = 'Brawl'
-
-
-class Bureaucracy(_Ability):
-    id = 104
-    name = 'Bureaucracy'
-
-
-class Craft(_Ability):
-    id = 105
-    name = 'Craft'
-    can_roll = True
-    can_purchase = False
-    can_specialize = False
-    use = CharacterCraft
-
-class Dodge(_Ability):
-    id = 106
-    name = 'Dodge'
-
-
-class Integrity(_Ability):
-    id = 107
-    name = 'Integrity'
-
-
-class Investigation(_Ability):
-    id = 108
-    name = 'Investigation'
-
-
-class Larceny(_Ability):
-    id = 109
-    name = 'Larceny'
-
-
-class Linguistics(_Ability):
-    id = 110
-    name = 'Linguistics'
-
-
-class Lore(_Ability):
-    id = 111
-    name = 'Lore'
-
-
-class MartialArts(_Ability):
-    id = 112
-    name = 'Martial Arts'
-
-
-class Medicine(_Ability):
-    id = 113
-    name = 'Medicine'
-
-
-class Melee(_Ability):
-    id = 114
-    name = 'Melee'
-
-
-class Occult(_Ability):
-    id = 115
-    name = 'Occult'
-
-
-class Performance(_Ability):
-    id = 116
-    name = 'Performance'
-
-
-class Presence(_Ability):
-    id = 117
-    name = 'Presence'
-
-
-class Resistance(_Ability):
-    id = 118
-    name = 'Resistance'
-
-
-class Ride(_Ability):
-    id = 119
-    name = 'Ride'
-
-
-class Sail(_Ability):
-    id = 120
-    name = 'Sail'
-
-
-class Socialize(_Ability):
-    id = 121
-    name = 'Socialize'
-
-
-class Stealth(_Ability):
-    id = 122
-    name = 'Stealth'
-
-
-class Survival(_Ability):
-    id = 123
-    name = 'Survival'
-
-
-class Thrown(_Ability):
-    id = 124
-    name = 'Thrown'
-
-
-class War(_Ability):
-    id = 125
-    name = 'War'
-
-
-ABILITY_BASE = (Archery, Athletics, Awareness, Bureaucracy, Craft, Dodge, Integrity, Investigation, Larceny,
-                 Linguistics, Lore, Medicine, Melee, Occult, Performance, Presence, Resistance,
-                 Ride, Sail, Socialize, Stealth, Survival, Thrown, War)
-
-
-STAT_BASE = ALL_ATTRIBUTES + ABILITY_BASE + ALL_ADVANTAGES
+        row = self.stat_row(["Specialties", found])
+        self.set_int(target, row, value=value)

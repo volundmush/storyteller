@@ -1,111 +1,108 @@
-from __future__ import unicode_literals
-from storyteller.base.templates import Template
-from storyteller.exbase.splats import ALL_MORTAL_X, ALL_SOLAR_X, ALL_TERRESTRIAL_X, ALL_ABYSSAL_X, ALL_INFERNAL_X
-from storyteller.exbase.splats import ALL_SIDEREAL_X, ALL_ALCHEMICAL_X, ALL_LUNAR_X, ALL_SPIRIT_X, ALL_BLOODED_X
-from storyteller.exbase.splats import ALL_JADEBORN_X, ALL_JADEBORN_Y, ALL_DRAGONKING_X, ALL_RAKSHA_X, ALL_RAKSHA_Y
-from storyteller.exbase.splats import ALL_LIMINAL_X
+from storyteller.templates import Template as _Template
+from athanor.utils import partial_match
+from storyteller.exceptions import StoryDBException
+from .stats import _ATTRIBUTES
+
+_START_ADVANTAGES = {
+    "Willpower": 5,
+    "Essence": 1
+}
 
 
-class Mortal(Template):
-    id = 1
-    name = 'Mortal'
-    x_name = 'Profession'
-    x_classes = ALL_MORTAL_X
-    willpower = 3
+def get_willpower_normal(target):
+    if (will := target.story_stats.filter(stat__name_1="Advantages", stat__name_2="Essence").first()):
+        return will.stat_value
+    return 0
 
 
-class _Exalt(Template):
-    willpower = 5
-    x_name = 'Caste'
+def get_willpower_max(target):
+    return 10
 
 
-class Solar(_Exalt):
-    id = 2
-    name = 'Solar'
-    x_classes = ALL_SOLAR_X
-    tem_colors = {'border': 'y'}
+get_willpower = get_willpower_normal
 
 
-class Abyssal(_Exalt):
-    id = 3
-    name = 'Abyssal'
-    x_classes = ALL_ABYSSAL_X
+def get_essence(target):
+    if (essence := target.story_stats.filter(stat__name_1="Advantages", stat__name_2="Essence").first()):
+        return essence.stat_value
+    return 1
 
 
-class Infernal(_Exalt):
-    id = 4
-    name = 'Infernal'
-    x_classes = ALL_INFERNAL_X
+class _Base(_Template):
+    sub_types = []
+    sub_name = "Caste"
+    start_advantages = _START_ADVANTAGES
+
+    def set_sub(self, entry: str):
+        if not entry:
+            raise StoryDBException(f"Must enter a Template name!")
+        if not (found := partial_match(entry, self.sub_types)):
+            raise StoryDBException(f"No {self.sub_name} matches {entry}.")
+        self.handler.owner.db.template_subtype = found
+
+    def initialize_attributes(self):
+        c = self.handler.owner
+        for a in _ATTRIBUTES:
+            c.st_attributes.set(c, c, [a], value=1)
+
+    def initialize_abilities(self):
+        pass
+
+    def initialize_advantages(self):
+        c = self.handler.owner
+        for k, v in self.start_advantages.items():
+            c.st_advantages.set(c, c, [k], value=v)
+
+    def initialize_template(self):
+        if self.sub_types:
+            self.handler.owner.db.template_subtype = self.sub_types[0]
+
+    def initialize(self):
+        self.initialize_template()
+        self.initialize_attributes()
+        self.initialize_abilities()
+        self.initialize_advantages()
+
+    def pool_personal_max(self):
+        pass
+
+    def pool_peripheral_max(self):
+        pass
+
+    def pool_overdrive_max(self):
+        pass
 
 
-class Terrestrial(_Exalt):
-    id = 5
-    name = 'Terrestrial'
-    x_name = 'Aspect'
-    x_classes = ALL_TERRESTRIAL_X
+_MORTAL_ADV = dict(_START_ADVANTAGES)
+_MORTAL_ADV["Willpower"] = 3
 
 
-class Sidereal(_Exalt):
-    id = 6
-    name = 'Sidereal'
-    x_classes = ALL_SIDEREAL_X
+class Mortal(_Base):
+    sub_types = ["Warrior", "Priest", "Savant", "Criminal", "Broker"]
+    start_advantages = _MORTAL_ADV
 
 
-class Alchemical(_Exalt):
-    id = 7
-    name = 'Alchemical'
-    x_classes = ALL_ALCHEMICAL_X
+class Solar(_Base):
+    sheet_colors = {'border': 'y'}
+    sub_types = ["Dawn", "Zenith", "Twilight", "Night", "Eclipse"]
 
 
-class Lunar(_Exalt):
-    id = 8
-    name = 'Lunar'
-    x_classes = ALL_LUNAR_X
+class Abyssal(_Base):
+    sub_types = ["Dusk", "Midnight", "Daybreak", "Day", "Moonshadow"]
 
 
-class Spirit(_Exalt):
-    id = 9
-    name = 'Spirit'
-    x_classes = ALL_SPIRIT_X
+class DragonBlooded(_Base):
+    name = "Dragon-Blooded"
+    sub_types = ["Fire", "Water", "Air", "Earth", "Wood"]
 
 
-class GodBlooded(_Exalt):
-    id = 10
-    name = 'God-Blooded'
-    x_classes = ALL_BLOODED_X
+class Sidereal(_Base):
+    sub_types = ["Journeys", "Serenity", "Battles", "Secrets", "Endings"]
 
 
-class Jadeborn(_Exalt):
-    id = 11
-    name = 'Jadeborn'
-    x_classes = ALL_JADEBORN_X
-    y_classes = ALL_JADEBORN_Y
+class Alchemical(_Base):
+    sub_types = ["Orichalcum", "Moonsilver", "Jade", "Starmetal", "Soulsteel", "Adamant"]
 
 
-class DragonKing(_Exalt):
-    id = 12
-    name = 'Dragon-King'
-    x_name = 'Breed'
-    x_classes = ALL_DRAGONKING_X
-
-
-class Raksha(_Exalt):
-    id = 13
-    name = 'Raksha'
-    x_name = 'Ascendant Grace'
-    y_name = 'Shadowed Grace'
-    x_classes = ALL_RAKSHA_X
-    y_classes = ALL_RAKSHA_Y
-
-
-# 3e Templates start here!
-class Liminal(_Exalt):
-    id = 20
-    name = 'Liminal'
-    x_name = 'Aspect'
-    x_classes = ALL_LIMINAL_X
-
-
-class Exigent(_Exalt):
-    id = 21
-    name = 'Exigent'
+class Lunar(_Base):
+    sub_types = ["Full Moon", "Changing Moon", "No Moon", "Casteless"]
