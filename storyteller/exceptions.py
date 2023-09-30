@@ -1,2 +1,0 @@
-class StoryDBException(Exception):
-    pass
