@@ -36,16 +36,12 @@ def at_server_start():
 
     try:
         for module in settings.STORYTELLER_TEMPLATE_MODULES:
-            print(f"Loading storyteller templates from {module}")
             located = callables_from_module(module)
-            print(f"Located: {located}")
             for k, v in located.items():
                 template = v()
                 storyteller.TEMPLATES[str(template)] = template
     except Exception as err:
         print(err)
-
-    storyteller.ROOT = class_from_module(settings.STORYTELLER_ROOT)("Root")
 
 
 def at_server_stop():
@@ -79,7 +75,10 @@ def at_server_cold_start():
     # but can't be, because we crashed. This should put them all
     # into storage and update all time trackers.
     from athanor.typeclasses.characters import AthanorPlayerCharacter
-    for obj in AthanorPlayerCharacter.objects.get_by_tag(key="puppeted", category="account"):
+
+    for obj in AthanorPlayerCharacter.objects.get_by_tag(
+        key="puppeted", category="account"
+    ):
         obj.at_post_unpuppet(last_logout=obj.db.last_online, shutdown=True)
 
 
