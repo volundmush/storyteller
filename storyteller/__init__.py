@@ -1,14 +1,10 @@
-TEMPLATES = {}
-
-ROOT = None
+GAMES = {}
 
 
 def init(settings, plugins):
     settings.AT_SERVER_STARTSTOP_MODULE.append("storyteller.startup_hooks")
 
-    settings.STORYTELLER_DEFAULT_TEMPLATE = "Mortal"
-
-    settings.STORYTELLER_TEMPLATE_MODULES = []
+    settings.STORYTELLER_MODULES = dict()
 
     settings.INSTALLED_APPS.append("storyteller")
 

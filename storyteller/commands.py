@@ -60,12 +60,14 @@ class CmdSheet(AthanorCommand):
             )
             return
 
-        if switch not in node.options:
+        if not (operation := partial_match(switch, node.options)):
             self.msg(f"No such switch option. Choices are: {', '.join(node.options)}")
             return
 
-        if not self.rhs:
-            self.msg("You must provide a value.")
-            return
-
-        node.do_operation(self.caller, path[2:], self.rhs, switch)
+        op = self.operation(
+            target=node,
+            operation=operation,
+            kwargs={"path": path[2:], "value": self.rhs},
+        )
+        op.execute()
+        self.op_message(op)
