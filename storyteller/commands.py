@@ -1,5 +1,6 @@
 from athanor.utils import partial_match
 from athanor.commands import AthanorCommand, AthanorAccountCommand
+from .utils import get_story
 
 
 class CmdSheet(AthanorCommand):
@@ -18,7 +19,7 @@ class CmdSheet(AthanorCommand):
     help_category = "Storyteller"
 
     def func(self):
-        if self.switches and self.caller.is_admin():
+        if self.switches:
             self.do_switches()
             return
 
@@ -48,15 +49,11 @@ class CmdSheet(AthanorCommand):
             self.msg("No such character.")
             return
 
-        if not (handlers := getattr(target, "get_story_handlers", None)):
-            self.msg(f"{target} is not a Storyteller Character.")
-            return
+        story = get_story(target)
 
-        choices = handlers()
-
-        if not (node := partial_match(path[1], choices)):
+        if not (node := partial_match(path[1], story.handlers)):
             self.msg(
-                f"No such handler. Choices are: {', '.join([str(c) for c in choices])}"
+                f"No such handler. Choices are: {', '.join([str(c) for c in story.handlers])}"
             )
             return
 

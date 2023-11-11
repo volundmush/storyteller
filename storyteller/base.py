@@ -1,5 +1,5 @@
 from evennia.utils.utils import callables_from_module
-from athanor.utils import partial_match, Request
+from athanor.utils import partial_match, Operation
 import storyteller
 from storyteller.models import SheetInfo
 
@@ -88,13 +88,12 @@ class Game:
         return getattr(self, "name", self.__class__.__name__)
 
     def setup_templates(self, path: str):
-        templates = callables_from_module(path)
-        for k, v in templates.items():
-            self.templates[k] = v(self)
+        for k, v in callables_from_module(path).items():
+            template = v(self)
+            self.templates[template.name] = template
 
     def setup_handlers(self, path: str):
-        handlers = callables_from_module(path)
-        self.handlers.extend(handlers.values())
+        self.handlers.extend(callables_from_module(path).values())
 
     def get_handlers(self, character):
         return self.handlers

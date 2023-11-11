@@ -12,3 +12,5 @@ def init(settings, plugins):
     settings.STORYTELLER_SKILL_OPTIONS = ("set", "tag")
 
     settings.CMD_MODULES_CHARACTER.append("storyteller.commands")
+
+    settings.STORYTELLER_DEFAULT_MODULE = None

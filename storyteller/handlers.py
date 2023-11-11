@@ -10,6 +10,7 @@ from athanor.utils import (
 )
 from .utils import dramatic_capitalize
 from .models import (
+    SheetInfo,
     Stat,
     StatRank,
     Power,
@@ -82,44 +83,64 @@ class RawHandler:
     def template(self):
         return self.game.templates.get(self.owner.sheet.template, None)
 
+    def at_template_change(self, template):
+        pass
+
 
 class GameHandler(RawHandler):
     name = "Game"
+    options = ("set",)
+    min_path_length = 0
+    load_order = -10000
 
     def __init__(self, owner):
         super().__init__(owner, None)
-        self.game_module = None
-        self.handlers = list()
-        self.sorted_handlers = list()
+        self.game = None
+        self.handlers = [self]
         self.loaded = False
+        self.load()
 
-    def check_load(self):
-        if not self.loaded:
-            self.load()
-
-    def load(self, module=None):
-        game_name = None
-        if not module:
-            if not hasattr(self.owner, "sheet"):
-                raise ValueError("No Game set!")
-            game_name = self.owner.sheet.game
-        if not module:
-            self.game = storyteller.GAMES.get(game_name, None)
-        if not self.game:
-            raise ValueError("No module found for this game!")
+    def load(self):
+        if self.loaded:
+            return
+        self.loaded = True
+        created = False
+        if not hasattr(self.owner, "sheet"):
+            self.game = storyteller.GAMES.get(settings.STORYTELLER_DEFAULT_MODULE, None)
+            if not self.game:
+                raise ValueError("No default game module found!")
+            sheet = SheetInfo.objects.create(
+                character=self.owner,
+                game=self.game.key,
+                template=self.game.default_template,
+            )
+            sheet.save()
+            created = True
+        else:
+            self.game = storyteller.GAMES.get(self.owner.sheet.game, None)
+            if not self.game:
+                raise ValueError("No module found for this game!")
         if not (handlers := self.game.get_handlers(self.owner)):
             raise ValueError("No handlers for this game!")
         self.handlers.clear()
         self.handlers.append(self)
         self.handlers.extend([handler(self.owner, self.game) for handler in handlers])
         self.handlers.sort(key=lambda x: x.load_order)
-        self.loaded = True
+
+        template = self.template()
+        if not template:
+            raise ValueError("No template found for this game!")
+        if created:
+            template.change(self.owner)
 
         for handler in self.handlers:
             handler.at_load()
 
+        if created:
+            for handler in self.handlers:
+                handler.at_template_change(template)
+
     def get(self, handler: str):
-        self.check_load()
         if not (handler := partial_match(handler, self.handlers)):
             raise ValueError(
                 f"No handler found matching '{handler}'. Choices are: {', '.join(self.handlers)}"
@@ -127,8 +148,7 @@ class GameHandler(RawHandler):
         return handler
 
     def get_game(self):
-        self.check_load()
-        return self.game_module
+        return self.game
 
     def op_set(self, operation: Operation):
         pass
@@ -273,13 +293,6 @@ class TemplateHandler(RawHandler):
     load_order = -1000
 
     def at_load(self):
-        if not hasattr(self.owner, "sheet"):
-            template = self.game.get_template(self.game.default_template)
-            template.change(self.owner)
-        for handler in self.game.handlers:
-            handler.at_template_change(template)
-
-    def at_template_change(self, template):
         pass
 
     def all_templates(self):
@@ -560,12 +573,14 @@ class StatHandler(BaseHandler):
 
 
 class AdvantageHandler(StatHandler):
-    choices = settings.STORYTELLER_ADVANTAGES
     stat_category = "Advantages"
     plural_name = "Advantages"
     singular_name = "Advantage"
     name = "Advantages"
     options = ("set",)
+
+    def get_choices(self) -> list[str]:
+        return getattr(self.template(), "advantages", list())
 
     def get_choice(self, operation, entry: str) -> str:
         choice = super().get_choice(operation, entry)
@@ -575,12 +590,31 @@ class AdvantageHandler(StatHandler):
 
 
 class AttributeHandler(StatHandler):
-    choices = settings.STORYTELLER_ATTRIBUTES
     stat_category = "Attributes"
     plural_name = "Attributes"
     singular_name = "Attribute"
     name = "Attributes"
-    options = settings.STORYTELLER_ATTRIBUTE_OPTIONS
+    options = (
+        "set",
+        "rank",
+    )
+
+    def get_choices(self) -> list[str]:
+        return self.game.attributes
+
+
+class AbilityHandler(StatHandler):
+    stat_category = "Abilities"
+    plural_name = "Abilities"
+    singular_name = "Ability"
+    name = "Abilities"
+    options = (
+        "set",
+        "rank",
+    )
+
+    def get_choices(self) -> list[str]:
+        return self.game.abilities
 
 
 class MeritHandler(StatHandler):
@@ -592,7 +626,6 @@ class MeritHandler(StatHandler):
 
 
 class SpecialtyHandler(MeritHandler):
-    choices = settings.STORYTELLER_SKILLS
     stat_category = "Specialties"
     plural_name = "Specialties"
     singular_name = "Specialty"
