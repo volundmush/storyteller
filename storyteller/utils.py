@@ -1,6 +1,6 @@
 import re
 
-_RE_CAP = re.compile(r"(\b[a-zA-Z]+\b)")
+_RE_CAP = re.compile(r"(\b[a-zA-Z0-9]+\b)")
 # List of words to keep in lowercase
 _lowercase_words = {"of", "the", "a", "and", "in"}
 
