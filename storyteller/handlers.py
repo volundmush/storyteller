@@ -172,23 +172,91 @@ class RawHandler:
 
     def render_sheet_header(self, viewer, width, lines, name=None):
         available_width = width - 2
-        t = self.template()
         border = self.get_color("border")
+        if viewer.uses_screenreader():
+            symbol_left = " "
+            symbol_right = " "
+            symbol_filler = " "
+            symbol_slash = " "
+        else:
+            symbol_left = "}"
+            symbol_right = "{"
+            symbol_filler = "-"
+            symbol_slash = "/"
+
         if not name:
-            lines.append(ANSIString(f"|{border}" + "}" + "-" * available_width + "{|n"))
+            lines.append(
+                ANSIString(
+                    f"|{border}"
+                    + symbol_left
+                    + (symbol_filler * available_width)
+                    + symbol_right
+                    + "|n"
+                )
+            )
             return
         slash = self.get_color("slash")
         title = self.get_color("title")
-        center = f"|{slash}/|n" + f"|{title}{name}|n" + f"|{slash}/|n"
+        center = (
+            f"|{slash}{symbol_slash}|n"
+            + f"|{title}{name}|n"
+            + f"|{slash}{symbol_slash}|n"
+        )
 
         available_width -= len(ANSIString(center))
         divided = available_width / 2
         left_len = math.floor(divided)
         right_len = math.ceil(divided)
 
-        left = ("-" * left_len) + "|n"
-        right = "-" * right_len
-        combined = f"|{border}" + "}" + left + center + f"|{border}" + right + "{|n"
+        left = (symbol_filler * left_len) + "|n"
+        right = symbol_filler * right_len
+        combined = (
+            f"|{border}"
+            + symbol_left
+            + left
+            + center
+            + f"|{border}"
+            + right
+            + symbol_right
+            + "|n"
+        )
+        lines.append(ANSIString(combined))
+
+    def render_sheet_subheader(self, viewer, width, lines, name):
+        available_width = width - 2
+        border = self.get_color("border")
+        slash = self.get_color("slash")
+        title = self.get_color("title")
+        if viewer.uses_screenreader():
+            symbol_filler = "    "
+            symbol_border = " "
+        else:
+            symbol_filler = "===="
+            symbol_border = "||"
+
+        center = (
+            f"|{slash}{symbol_filler}|n"
+            + f"|{title}{name}|n"
+            + f"|{slash}{symbol_filler}|n"
+        )
+
+        available_width -= len(ANSIString(center))
+        divided = available_width / 2
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+
+        left = (" " * left_len) + "|n"
+        right = " " * right_len
+        combined = (
+            f"|{border}"
+            + symbol_border
+            + left
+            + center
+            + f"|{border}"
+            + right
+            + symbol_border
+            + "|n"
+        )
         lines.append(ANSIString(combined))
 
     def tri_split_width(self, width) -> tuple[int]:
@@ -207,8 +275,22 @@ class RawHandler:
             return
         title = self.get_color("title")
         slash = self.get_color("slash")
+        if viewer.uses_screenreader():
+            symbol_slash = " "
+            symbol_filler = " "
+            symbol_left = " "
+            symbol_right = " "
+        else:
+            symbol_slash = "/"
+            symbol_filler = "-"
+            symbol_left = "}"
+            symbol_right = "{"
+
         rendered_names = [
-            ANSIString(f"|{slash}/|n|{title}{name}|n|{slash}/|n") for name in names
+            ANSIString(
+                f"|{slash}{symbol_slash}|n|{title}{name}|n|{slash}{symbol_slash}|n"
+            )
+            for name in names
         ]
         widths = self.tri_split_width(width - 2)
         combined_names = list()
@@ -217,13 +299,13 @@ class RawHandler:
             divided = (widths[i] - len(name)) / 2
             left_len = math.floor(divided)
             right_len = math.ceil(divided)
-            left = ANSIString(f"|{border}" + ("-" * left_len) + "|n")
-            right = ANSIString(f"|{border}" + ("-" * right_len) + "|n")
+            left = ANSIString(f"|{border}" + (symbol_filler * left_len) + "|n")
+            right = ANSIString(f"|{border}" + (symbol_filler * right_len) + "|n")
             combined_names.append(ANSIString("").join([left, name, right]))
         combined = (
-            ANSIString(f"|{border}" + "}")
+            ANSIString(f"|{border}" + symbol_left)
             + ANSIString("").join(combined_names)
-            + ANSIString(f"|{border}" + "{|n")
+            + ANSIString(f"|{border}" + symbol_right + "|n")
         )
         lines.append(combined)
 
@@ -234,6 +316,10 @@ class RawHandler:
             return
         widths = self.tri_split_width(width - 4)
         border = self.get_color("border")
+        if viewer.uses_screenreader():
+            symbol_border = " "
+        else:
+            symbol_border = "||"
 
         # The number of total lines equals the max() of max() of all columns.
         max_lines = max([len(column) for column in columns])
@@ -247,7 +333,7 @@ class RawHandler:
         border = self.get_color("border")
 
         for i in range(max_lines):
-            b = f"|{border}|||n"
+            b = f"|{border}{symbol_border}|n"
             left = columns[0][i]
             center = columns[1][i]
             right = columns[2][i]
@@ -293,26 +379,31 @@ class RawHandler:
 
         border = self.get_color("border")
 
+        if viewer.uses_screenreader():
+            symbol_border = " "
+        else:
+            symbol_border = "||"
+
         # Now we'll use ANSIString's join method to join each line of fits into a single line.
         for line_items in lines_of_fits:
             line = ANSIString(" " * between_pad).join(line_items)
             filler = ANSIString(" " * (available_width - len(line)))
             out_line = (
-                ANSIString(f"|{border}|||n")
+                ANSIString(f"|{border}{symbol_border}|n")
                 + ANSIString(" " * left_pad)
                 + line
                 + filler
-                + ANSIString(f"|n|{border}|||n")
+                + ANSIString(f"|n|{border}{symbol_border}|n")
             )
             lines.append(out_line)
 
         for item in no_fit:
             filler = ANSIString(" " * (element_width - len(item)))
             out_line = (
-                ANSIString(f"|{border}|||n")
+                ANSIString(f"|{border}{symbol_border}|n")
                 + item
                 + filler
-                + ANSIString(f"|n|{border}|||n")
+                + ANSIString(f"|n|{border}{symbol_border}|n")
             )
             lines.append(out_line)
 
@@ -349,7 +440,12 @@ class RawHandler:
         available_width -= stat.value
         stars = ""
 
-        if available_width <= 0:
+        if viewer.uses_screenreader():
+            symbol_dot = " "
+        else:
+            symbol_dot = "."
+
+        if (available_width <= 0) or viewer.uses_screenreader():
             available_width += stat.value
             stars = str(stat.value)
             available_width -= len(stars)
@@ -362,9 +458,15 @@ class RawHandler:
 
         dot_color = self.get_color("dot")
 
-        dots = ANSIString(f"|{dot_color}{'.' * available_width}|n")
+        dots = ANSIString(f"|{dot_color}{symbol_dot * available_width}|n")
 
         return tier_name + dots + stars
+
+    def render_sheet_power(self, viewer, width, rank, tiers=False, item_width=35):
+        display_name = (
+            rank.power.name if rank.value <= 1 else f"{rank.power.name} ({rank.value})"
+        )
+        return display_name.ljust(item_width)
 
     def render_sheet_stats(
         self,
@@ -395,7 +497,13 @@ class RawHandler:
             )
 
         self.render_sheet_tabular(
-            viewer, width, lines, items, between_pad=1, left_pad=1
+            viewer,
+            width,
+            lines,
+            items,
+            between_pad=1,
+            left_pad=1,
+            element_width=item_width,
         )
 
 
@@ -520,8 +628,19 @@ class GameHandler(RawHandler):
         left_len = math.floor(divided)
         right_len = math.ceil(divided)
         border = self.get_color("border")
-        left = ANSIString("  " + f"|{border}" + "." + ("-" * left_len))
-        right = ANSIString(("-" * right_len) + ".|n")
+        if viewer.uses_screenreader():
+            symbol_filler = " "
+            symbol_dot = " "
+            symbol_rslash = " "
+            symbol_lslash = " "
+        else:
+            symbol_filler = "-"
+            symbol_dot = "."
+            symbol_rslash = "\\"
+            symbol_lslash = "/"
+
+        left = ANSIString("  " + f"|{border}" + symbol_dot + (symbol_filler * left_len))
+        right = ANSIString((symbol_filler * right_len) + symbol_dot + "|n")
         lines.append(left + right)
 
         available_width = width - 4 - len(settings.SERVERNAME)
@@ -529,7 +648,11 @@ class GameHandler(RawHandler):
         left_len = math.floor(divided)
         right_len = math.ceil(divided)
         center = (" " * left_len) + settings.SERVERNAME + (" " * right_len)
-        lines.append(ANSIString(f" |{border}/|n" + center + f"|{border}\\|n"))
+        lines.append(
+            ANSIString(
+                f" |{border}{symbol_lslash}|n" + center + f"|{border}{symbol_rslash}|n"
+            )
+        )
 
     def render_sheet_info(self, viewer, width, lines):
         t = self.template()
@@ -555,6 +678,11 @@ class GameHandler(RawHandler):
 
         border = self.get_color("border")
 
+        if viewer.uses_screenreader():
+            symbol_border = " "
+        else:
+            symbol_border = "||"
+
         for i in range(max_lines):
             left = columns[0][i]
             if isinstance(left, str):
@@ -571,11 +699,12 @@ class GameHandler(RawHandler):
             right_display = right_display.ljust(widths[1])
             lines.append(
                 ANSIString(
-                    f"|{border}|||n" + left_display + right_display + f"|{border}|||n"
+                    f"|{border}{symbol_border}|n"
+                    + left_display
+                    + right_display
+                    + f"|{border}{symbol_border}|n"
                 )
             )
-
-        border = self.get_color("border")
 
     def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
         self.render_sheet_top(viewer, width, lines)
@@ -1661,7 +1790,7 @@ class PowerHandler(BaseHandler):
             ).first()
         ):
             if create:
-                power = self.power_model.objects.create(**power_dict)
+                power, created = self.power_model.objects.get_or_create(**power_dict)
                 rank = rev.create(power=power)
             else:
                 power_dict.pop("name", None)
@@ -1861,6 +1990,58 @@ class PowerHandler(BaseHandler):
                 f"{self.render_subcategory(category, subcategory, plural=False)} not found to tier."
             )
         self._op_tier(operation, rank, value)
+
+    def all(self):
+        return (
+            self._get_reverse()
+            .filter(power__family__iexact=self.family)
+            .order_by("power__category", "power__subcategory", "power__name")
+        )
+
+    def sort_data(self, data):
+        return data
+
+    def _render_category_name(self, name):
+        return f"{name} {self.family}"
+
+    def _render_subcategory_name(self, name):
+        return name
+
+    def render_sheet_categories(
+        self, viewer, width: int, lines: list[ANSIString], data
+    ):
+        tiers = "tier" in self.options
+        for category, subcategories in data.items():
+            header_name = self._render_category_name(category)
+            self.render_sheet_header(viewer, width, lines, header_name)
+            for subcat, ranks in subcategories.items():
+                subheader_name = self._render_subcategory_name(subcat)
+                self.render_sheet_subheader(viewer, width, lines, subheader_name)
+                powers = list()
+                for rank in ranks:
+                    powers.append(
+                        self.render_sheet_power(
+                            viewer, width, rank, tiers=tiers, item_width=35
+                        )
+                    )
+                self.render_sheet_tabular(
+                    viewer,
+                    width,
+                    lines,
+                    powers,
+                    left_pad=1,
+                    between_pad=1,
+                    element_width=35,
+                )
+
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        if not (items := self.all()):
+            return
+        data = defaultdict(lambda: defaultdict(list))
+        for rank in items:
+            data[rank.power.category][rank.power.subcategory].append(rank)
+        sorted_data = self.sort_data(data)
+        self.render_sheet_categories(viewer, width, lines, sorted_data)
 
 
 class CustomPowerHandler(BaseHandler):
@@ -2100,18 +2281,35 @@ class FooterHandler(RawHandler):
         border = self.get_color("border")
         t = self.template()
 
+        if viewer.uses_screenreader():
+            symbol_lslash = " "
+            symbol_rslash = " "
+            symbol_filler = " "
+            symbol_corner = " "
+        else:
+            symbol_lslash = "\\"
+            symbol_rslash = "/"
+            symbol_filler = "-"
+            symbol_corner = "'"
+
         available_width = width - 4 - len(t.sheet_footer)
         divided = available_width / 2
         left_len = math.floor(divided)
         right_len = math.ceil(divided)
         center = (" " * left_len) + t.sheet_footer + (" " * right_len)
-        lines.append(ANSIString(f" |{border}\\|n" + center + f"|{border}/|n"))
+        lines.append(
+            ANSIString(
+                f" |{border}{symbol_lslash}|n" + center + f"|{border}{symbol_rslash}|n"
+            )
+        )
 
         available_width = width - 6
         divided = available_width / 2
         left_len = math.floor(divided)
         right_len = math.ceil(divided)
 
-        left = ANSIString("  " + f"|{border}" + "'" + ("-" * left_len))
-        right = ANSIString(("-" * right_len) + "'|n")
+        left = ANSIString(
+            "  " + f"|{border}" + symbol_corner + (symbol_filler * left_len)
+        )
+        right = ANSIString((symbol_filler * right_len) + symbol_corner + "|n")
         lines.append(left + right)
