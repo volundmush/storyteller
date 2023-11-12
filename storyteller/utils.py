@@ -1,16 +1,17 @@
 import re
 
 _RE_CAP = re.compile(r"(\b[a-zA-Z]+\b)")
+# List of words to keep in lowercase
+_lowercase_words = {"of", "the", "a", "and", "in"}
 
 
 def dramatic_capitalize(capitalize_string=""):
     def capitalize_word(match):
         word = match.group(0)
-        # List of words to keep in lowercase
-        lowercase_words = {"of", "the", "a", "and", "in"}
+
         # Capitalize word if not in lowercase_words, else keep it lower
         return (
-            word.capitalize() if word.lower() not in lowercase_words else word.lower()
+            word.capitalize() if word.lower() not in _lowercase_words else word.lower()
         )
 
     # Apply the function to each word
