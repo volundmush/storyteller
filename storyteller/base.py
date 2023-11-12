@@ -18,8 +18,11 @@ class Template:
     field_defaults = {}
     field_choices = {}
     power_stat = None
-    colors = dict()
+    colors = {"stat": "n", "border": "n", "dot": "n", "slash": "n", "title": "n"}
     tier_symbols = {0: " ", 1: "-", 2: "+", 3: "*"}
+    advantages = list()
+    advantages_defaults = dict()
+    sheet_footer = "Storyteller"
 
     def __init__(self, game):
         self.game = game
@@ -70,6 +73,27 @@ class Template:
         if not model:
             return ""
         return model.value
+
+    def get_sheet_columns(
+        self, target
+    ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+        """
+        Get the left and right columns for the sheet.
+        """
+        return self.get_left_columns(target), self.get_right_columns(target)
+
+    def get_left_columns(self, target) -> list[tuple[str, str]]:
+        out = list()
+        out.append(("Template", self.name))
+        out.append(("Name", str(target)))
+        out.append(("Sex", str(target.db.sex)))
+        return out
+
+    def get_right_columns(self, target) -> list[tuple[str, str]]:
+        out = list()
+        for field in self.get_fields(target):
+            out.append((field, self.field(target, field)))
+        return out
 
 
 class Game:

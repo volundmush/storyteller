@@ -11,6 +11,7 @@ could likely be used for many other things.
 import typing
 import storyteller
 import math
+from collections import defaultdict
 from django.conf import settings
 from evennia.utils.ansi import ANSIString
 from athanor.utils import (
@@ -190,6 +191,68 @@ class RawHandler:
         combined = f"|{border}" + "}" + left + center + f"|{border}" + right + "{|n"
         lines.append(ANSIString(combined))
 
+    def tri_split_width(self, width) -> tuple[int]:
+        available_width = width
+        divided = available_width / 3
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+        center_len = available_width - left_len - right_len
+        return left_len, center_len, right_len
+
+    def render_sheet_triheader(self, viewer, width, lines, names):
+        if not names:
+            self.render_sheet_header(viewer, width, lines)
+            return
+        if not len(names) == 3:
+            return
+        title = self.get_color("title")
+        slash = self.get_color("slash")
+        rendered_names = [
+            ANSIString(f"|{slash}/|n|{title}{name}|n|{slash}/|n") for name in names
+        ]
+        widths = self.tri_split_width(width - 2)
+        combined_names = list()
+        border = self.get_color("border")
+        for i, name in enumerate(rendered_names):
+            divided = (widths[i] - len(name)) / 2
+            left_len = math.floor(divided)
+            right_len = math.ceil(divided)
+            left = ANSIString(f"|{border}" + ("-" * left_len) + "|n")
+            right = ANSIString(f"|{border}" + ("-" * right_len) + "|n")
+            combined_names.append(ANSIString("").join([left, name, right]))
+        combined = (
+            ANSIString(f"|{border}" + "}")
+            + ANSIString("").join(combined_names)
+            + ANSIString(f"|{border}" + "{|n")
+        )
+        lines.append(combined)
+
+    def render_sheet_tricolumns(self, viewer, width, lines, columns):
+        if not columns:
+            return
+        if not len(columns) == 3:
+            return
+        widths = self.tri_split_width(width - 4)
+        border = self.get_color("border")
+
+        # The number of total lines equals the max() of max() of all columns.
+        max_lines = max([len(column) for column in columns])
+
+        # Pad the columns to simplify our logic. This should make every column
+        # have the same number of lines.
+        for i, col in enumerate(columns):
+            while len(col) < max_lines:
+                col.append(ANSIString(" " * widths[i]))
+
+        border = self.get_color("border")
+
+        for i in range(max_lines):
+            b = f"|{border}|||n"
+            left = columns[0][i]
+            center = columns[1][i]
+            right = columns[2][i]
+            lines.append(b + b.join([left, center, right]) + b)
+
     def render_sheet_tabular(
         self,
         viewer,
@@ -268,18 +331,21 @@ class RawHandler:
             else ""
         )
 
+        stat_color = self.get_color("stat")
+
+        stat_name = ANSIString(
+            f"|{stat_color}" + context_delim.join([stat.stat.name, stat.context])
+            if stat.context
+            else stat.stat.name + "|n"
+        )
+
         tier_name = (
-            ANSIString("").join([tier_symbol, stat.stat.name])
+            ANSIString("").join([tier_symbol, stat_name])
             if tiers
             else ANSIString(stat.stat.name)
         )
 
-        stat_name = (
-            ANSIString(context_delim).join([tier_name, stat.context])
-            if stat.context
-            else tier_name
-        )
-        available_width -= len(stat_name)
+        available_width -= len(tier_name)
         available_width -= stat.value
         stars = ""
 
@@ -298,7 +364,7 @@ class RawHandler:
 
         dots = ANSIString(f"|{dot_color}{'.' * available_width}|n")
 
-        return stat_name + dots + stars
+        return tier_name + dots + stars
 
     def render_sheet_stats(
         self,
@@ -447,6 +513,74 @@ class GameHandler(RawHandler):
         sheet.template = game.default_template
         sheet.save()
         self.reload()
+
+    def render_sheet_top(self, viewer, width, lines):
+        available_width = width - 6
+        divided = available_width / 2
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+        border = self.get_color("border")
+        left = ANSIString("  " + f"|{border}" + "." + ("-" * left_len))
+        right = ANSIString(("-" * right_len) + ".|n")
+        lines.append(left + right)
+
+        available_width = width - 4 - len(settings.SERVERNAME)
+        divided = available_width / 2
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+        center = (" " * left_len) + settings.SERVERNAME + (" " * right_len)
+        lines.append(ANSIString(f" |{border}/|n" + center + f"|{border}\\|n"))
+
+    def render_sheet_info(self, viewer, width, lines):
+        t = self.template()
+        available_width = width - 2
+        divided = available_width / 2
+        widths = [math.floor(divided), math.ceil(divided)]
+        columns = t.get_sheet_columns(self.owner)
+
+        max_lines = max([len(column) for column in columns])
+        for i, col in enumerate(columns):
+            while len(col) < max_lines:
+                col.append(" ")
+
+        column_widths = defaultdict(list)
+        for i, col in enumerate(columns):
+            for line in col:
+                if isinstance(line, str):
+                    continue
+                column_widths[i].append(len(line[0]))
+
+        # Gather the max_column_widths, which will be used to justify text.
+        max_column_widths = [max(column_widths[i]) for i in range(len(column_widths))]
+
+        border = self.get_color("border")
+
+        for i in range(max_lines):
+            left = columns[0][i]
+            if isinstance(left, str):
+                left_display = left
+            else:
+                left_display = left[0].rjust(max_column_widths[0]) + ": " + left[1]
+            left_display = left_display.ljust(widths[0])
+
+            right = columns[1][i]
+            if isinstance(right, str):
+                right_display = right
+            else:
+                right_display = right[0].rjust(max_column_widths[1]) + ": " + right[1]
+            right_display = right_display.ljust(widths[1])
+            lines.append(
+                ANSIString(
+                    f"|{border}|||n" + left_display + right_display + f"|{border}|||n"
+                )
+            )
+
+        border = self.get_color("border")
+
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        self.render_sheet_top(viewer, width, lines)
+        self.render_sheet_header(viewer, width, lines)
+        self.render_sheet_info(viewer, width, lines)
 
 
 class BaseHandler(RawHandler):
@@ -672,6 +806,8 @@ class TemplateHandler(_TemplateHandler):
 
         v["template_before"] = self.owner.sheet.template
         v["template"] = template.change(self.owner)
+        for handler in self.base.handlers:
+            handler.at_template_change()
         self.announce_op_set(operation)
 
     def announce_op_set(self, operation):
@@ -837,6 +973,11 @@ class StatHandler(BaseHandler):
 
     def all(self):
         return self._get_reverse().filter(stat__category__iexact=self.stat_category)
+
+    def get(self, name: str, context: str = "") -> StatRank:
+        return (
+            self.all().filter(stat__name__iexact=name, context__iexact=context).first()
+        )
 
     def get_choices(self) -> list[str]:
         return getattr(self, "choices", list())
@@ -1130,6 +1271,50 @@ class StatHandler(BaseHandler):
         )
         self._op_unmod(operation, srank, value)
 
+    def render_sheet_tri_categories(
+        self, viewer, width, lines, psm, category, name_category=True
+    ):
+        r = self._get_reverse()
+        category = category.lower()
+        psm_lower = [p.lower() for p in psm]
+
+        gathered = [
+            r.filter(
+                stat__category__iexact=self.stat_category,
+                stat__name__in=getattr(self.game, f"{p}_{category}"),
+            )
+            for p in psm_lower
+        ]
+
+        if any(gathered):
+            names = [
+                f"{n.capitalize()} {category.capitalize()}"
+                if name_category
+                else f"{n.capitalize()}"
+                for n in psm
+            ]
+            self.render_sheet_triheader(
+                viewer,
+                width,
+                lines,
+                names=names,
+            )
+
+            widths = self.tri_split_width(width - 4)
+            rendered_columns = list()
+            tiers = "tier" in self.options
+            for i, column in enumerate(gathered):
+                items = list()
+                for stat in column:
+                    items.append(
+                        self.render_sheet_stat(
+                            viewer, width, stat, item_width=widths[i], tiers=tiers
+                        )
+                    )
+                rendered_columns.append(items)
+
+            self.render_sheet_tricolumns(viewer, width, lines, rendered_columns)
+
 
 class AdvantageHandler(StatHandler):
     """
@@ -1140,6 +1325,7 @@ class AdvantageHandler(StatHandler):
     The list of available Advantages usually differs by Template, so by default this handler checks template.advantages.
     """
 
+    sheet_render = False
     stat_category = "Advantages"
     singular_name = "Advantage"
     options = ("set",)
@@ -1153,6 +1339,26 @@ class AdvantageHandler(StatHandler):
         if choice == "Power":
             return self.owner.st_template.get().power_stat
         return choice
+
+    def at_template_change(self):
+        r = self._get_reverse()
+
+        t = self.template()
+
+        current = self.all()
+        for rank in current:
+            if rank.stat.name not in t.advantages:
+                rank.delete()
+
+        for name in t.advantages:
+            stat = self._get_stat(name)
+            rank, created = r.get_or_create(stat=stat)
+            if created:
+                rank.save()
+            d = t.advantages_defaults.get(name, 1)
+            if rank.value < d:
+                rank.value = d
+                rank.save()
 
 
 class AttributeHandler(StatHandler):
@@ -1185,6 +1391,11 @@ class AttributeHandler(StatHandler):
             if rank.value < 1:
                 rank.value = 1
                 rank.save()
+
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        self.render_sheet_tri_categories(
+            viewer, width, lines, ["physical", "social", "mental"], "attributes"
+        )
 
 
 class AbilityHandler(StatHandler):
@@ -1239,6 +1450,8 @@ class SpecialtyHandler(MeritHandler):
     options = ("set", "remove", "rank", "delete", "rename")
     enforce_context = True
     load_order = 20
+    context_delim = "/"
+    context_delim_display = "/"
 
     def get_choices(self) -> list[str]:
         """
@@ -1872,3 +2085,33 @@ class StatPowerHandler(BaseHandler):
 
     def render_delete(self, rank: StatPowerRank, before: int) -> str:
         return f"{self.render_rank(rank)} was removed (was {before} {self.render_purchases(before)})"
+
+
+class FooterHandler(RawHandler):
+    api_access = False
+    sheet_render = True
+    load_order = 999999999999
+
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        self.render_sheet_bottom(viewer, width, lines)
+
+    def render_sheet_bottom(self, viewer, width, lines):
+        self.render_sheet_header(viewer, width, lines)
+        border = self.get_color("border")
+        t = self.template()
+
+        available_width = width - 4 - len(t.sheet_footer)
+        divided = available_width / 2
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+        center = (" " * left_len) + t.sheet_footer + (" " * right_len)
+        lines.append(ANSIString(f" |{border}\\|n" + center + f"|{border}/|n"))
+
+        available_width = width - 6
+        divided = available_width / 2
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+
+        left = ANSIString("  " + f"|{border}" + "'" + ("-" * left_len))
+        right = ANSIString(("-" * right_len) + "'|n")
+        lines.append(left + right)

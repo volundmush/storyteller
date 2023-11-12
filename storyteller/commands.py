@@ -43,6 +43,8 @@ class CmdSheet(AthanorCommand):
 
         lines = list()
         for handler in story.handlers:
+            if not handler.sheet_render:
+                continue
             handler.render_sheet(self.caller, 78, lines)
 
         self.msg_lines(lines)
