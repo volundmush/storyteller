@@ -39,7 +39,13 @@ class CmdSheet(AthanorCommand):
         self.do_render(target)
 
     def do_render(self, target: "DefaultCharacter"):
-        self.msg(target.sheet.render(self.caller))
+        story = get_story(target)
+
+        lines = list()
+        for handler in story.handlers:
+            handler.render_sheet(self.caller, 78, lines)
+
+        self.msg_lines(lines)
 
     def do_help(self):
         if not (target := self.caller.search(self.lhs) if self.lhs else self.caller):

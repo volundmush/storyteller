@@ -18,6 +18,8 @@ class Template:
     field_defaults = {}
     field_choices = {}
     power_stat = None
+    colors = dict()
+    tier_symbols = {0: " ", 1: "-", 2: "+", 3: "*"}
 
     def __init__(self, game):
         self.game = game

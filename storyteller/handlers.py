@@ -10,7 +10,9 @@ could likely be used for many other things.
 """
 import typing
 import storyteller
+import math
 from django.conf import settings
+from evennia.utils.ansi import ANSIString
 from athanor.utils import (
     partial_match,
     validate_name,
@@ -40,16 +42,21 @@ class RawHandler:
     This is an Abstract base class. Do not use directly.
     """
 
+    api_access = True
+    sheet_render = True
     system_name = "SHEET"
     name: str = "Handler"
     options: set[str] = set()
     min_path_length = 1
     path_format = ""
     load_order = 0
+    context_delim = ":"
+    context_delim_display = ": "
 
-    def __init__(self, owner, game):
+    def __init__(self, owner, game, base):
         self.owner = owner
         self.game = game
+        self.base = base
 
     def __str__(self):
         """
@@ -145,6 +152,186 @@ class RawHandler:
         lines.append(f"  |wOperations|n: {', '.join(self.options)}")
         self.render_help_extra(lines)
 
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        pass
+
+    def get_color(self, color):
+        t = self.template()
+        colors = getattr(t, "colors", dict()).copy()
+        overrides = getattr(t, "color_overrides", dict())
+        colors.update(overrides)
+        return colors.get(color, "n")
+
+    def get_symbol(self, tier):
+        t = self.template()
+        symbols = getattr(t, "tier_symbols", dict()).copy()
+        overrides = getattr(t, "tier_symbol_overrides", dict())
+        symbols.update(overrides)
+        return symbols.get(tier, "+")
+
+    def render_sheet_header(self, viewer, width, lines, name=None):
+        available_width = width - 2
+        t = self.template()
+        border = self.get_color("border")
+        if not name:
+            lines.append(ANSIString(f"|{border}" + "}" + "-" * available_width + "{|n"))
+            return
+        slash = self.get_color("slash")
+        title = self.get_color("title")
+        center = f"|{slash}/|n" + f"|{title}{name}|n" + f"|{slash}/|n"
+
+        available_width -= len(ANSIString(center))
+        divided = available_width / 2
+        left_len = math.floor(divided)
+        right_len = math.ceil(divided)
+
+        left = ("-" * left_len) + "|n"
+        right = "-" * right_len
+        combined = f"|{border}" + "}" + left + center + f"|{border}" + right + "{|n"
+        lines.append(ANSIString(combined))
+
+    def render_sheet_tabular(
+        self,
+        viewer,
+        width,
+        lines,
+        items: list[ANSIString],
+        element_width=23,
+        left_pad=0,
+        between_pad=1,
+    ):
+        """
+        This is meant to render a series of items and generate a display sorta like this.
+
+        | +Awareness..........*** +Bureaucracy........*** +Craft............*****    |
+        |  Integrity..........*** +Investigation......*** +Linguistics........***    |
+        | +Lore.............***** +Medicine...........*** +Occult...........*****    |
+        | +Presence............** +Survival...........***                            |
+
+        """
+        fits = [item for item in items if len(item) <= element_width]
+        no_fit = [item for item in items if item not in fits]
+
+        available_width = width - 2 - left_pad
+        elements_per_line = 1
+        for possible_elements in range(1, 11):
+            elements_per_line = possible_elements
+            pad_needed = possible_elements - 1 * between_pad
+            if (possible_elements * element_width) + pad_needed > available_width:
+                elements_per_line -= 1
+                break
+
+        # Let's gather fits into a list of lists, where each list is a line.
+        # It's fine if the last line has fewer than elements_per_line elements.
+        lines_of_fits = list()
+        while fits:
+            lines_of_fits.append(fits[:elements_per_line])
+            fits = fits[elements_per_line:]
+
+        border = self.get_color("border")
+
+        # Now we'll use ANSIString's join method to join each line of fits into a single line.
+        for line_items in lines_of_fits:
+            line = ANSIString(" " * between_pad).join(line_items)
+            filler = ANSIString(" " * (available_width - len(line)))
+            out_line = (
+                ANSIString(f"|{border}|||n")
+                + ANSIString(" " * left_pad)
+                + line
+                + filler
+                + ANSIString(f"|n|{border}|||n")
+            )
+            lines.append(out_line)
+
+        for item in no_fit:
+            filler = ANSIString(" " * (element_width - len(item)))
+            out_line = (
+                ANSIString(f"|{border}|||n")
+                + item
+                + filler
+                + ANSIString(f"|n|{border}|||n")
+            )
+            lines.append(out_line)
+
+    def render_sheet_stat(
+        self, viewer, width, stat, tiers=False, context_delim=": ", item_width=23
+    ) -> ANSIString:
+        available_width = item_width
+
+        tier_color = self.get_color(f"tier_{stat.tier}")
+
+        tier_symbol = ANSIString(
+            f"|{tier_color}{self.get_symbol(stat.tier)}|n"
+            if tiers and stat.tier
+            else " "
+            if tiers
+            else ""
+        )
+
+        tier_name = (
+            ANSIString("").join([tier_symbol, stat.stat.name])
+            if tiers
+            else ANSIString(stat.stat.name)
+        )
+
+        stat_name = (
+            ANSIString(context_delim).join([tier_name, stat.context])
+            if stat.context
+            else tier_name
+        )
+        available_width -= len(stat_name)
+        available_width -= stat.value
+        stars = ""
+
+        if available_width <= 0:
+            available_width += stat.value
+            stars = str(stat.value)
+            available_width -= len(stars)
+        else:
+            stars = "*" * stat.value
+
+        star_color = self.get_color("star")
+
+        stars = ANSIString(f"|{star_color}{stars}|n")
+
+        dot_color = self.get_color("dot")
+
+        dots = ANSIString(f"|{dot_color}{'.' * available_width}|n")
+
+        return stat_name + dots + stars
+
+    def render_sheet_stats(
+        self,
+        viewer,
+        width,
+        lines,
+        stats,
+        name=None,
+        context_delim=": ",
+        item_width=23,
+    ):
+        self.render_sheet_header(viewer, width, lines, name or self.name)
+
+        items = list()
+
+        tiers = "tier" in self.options
+
+        for stat in stats:
+            items.append(
+                self.render_sheet_stat(
+                    viewer,
+                    width,
+                    stat,
+                    tiers=tiers,
+                    context_delim=self.context_delim_display,
+                    item_width=item_width,
+                )
+            )
+
+        self.render_sheet_tabular(
+            viewer, width, lines, items, between_pad=1, left_pad=1
+        )
+
 
 class GameHandler(RawHandler):
     """
@@ -173,8 +360,9 @@ class GameHandler(RawHandler):
         )
 
     def __init__(self, owner):
-        super().__init__(owner, None)
+        super().__init__(owner, None, self)
         self.handlers = [self]
+        self.handlers_dict = {self.name: self}
         self.loaded = False
 
     def reload(self):
@@ -209,8 +397,11 @@ class GameHandler(RawHandler):
                 handler.at_game_leave()
         self.handlers.clear()
         self.handlers.append(self)
-        self.handlers.extend([handler(self.owner, self.game) for handler in handlers])
+        self.handlers.extend(
+            [handler(self.owner, self.game, self) for handler in handlers]
+        )
         self.handlers.sort(key=lambda x: x.load_order)
+        self.handlers_dict = {handler.name: handler for handler in self.handlers}
 
         template = self.template()
         if not template:
@@ -429,6 +620,7 @@ class BaseHandler(RawHandler):
 class _TemplateHandler(RawHandler):
     options = ("set",)
     min_path_length = 0
+    sheet_render = False
 
     def get_choices(self):
         return list(self.game.templates.values())
@@ -621,6 +813,11 @@ class StatHandler(BaseHandler):
                 f"  |wContext|n: {'Required' if self.enforce_context else 'Optional'}"
             )
 
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        if not (stats := self.all()):
+            return
+        self.render_sheet_stats(viewer, width, lines, stats)
+
     @property
     def name(self):
         return self.stat_category
@@ -639,12 +836,7 @@ class StatHandler(BaseHandler):
         self.clear()
 
     def all(self):
-        return {
-            (srank.stat.name, srank.context): srank
-            for srank in self._get_reverse().filter(
-                stat__category__iexact=self.stat_category
-            )
-        }
+        return self._get_reverse().filter(stat__category__iexact=self.stat_category)
 
     def get_choices(self) -> list[str]:
         return getattr(self, "choices", list())
