@@ -13,7 +13,12 @@ class CmdSheet(AthanorCommand):
         "describe",
         "tag",
         "untag",
-        "rename",
+        "context",
+        "mod",
+        "unmod",
+        "tier",
+        "help",
+        "info",
     )
     locks = "cmd:all()"
     help_category = "Storyteller"
@@ -36,8 +41,28 @@ class CmdSheet(AthanorCommand):
     def do_render(self, target: "DefaultCharacter"):
         self.msg(target.sheet.render(self.caller))
 
+    def do_help(self):
+        if not (target := self.caller.search(self.lhs) if self.lhs else self.caller):
+            self.msg("No such character.")
+            return
+
+        story = get_story(target)
+
+        lines = list()
+        lines.append(self.styled_header(f"Sheet Help for {target}"))
+        story.game.render_help(lines)
+        for handler in story.handlers:
+            handler.render_help(lines)
+        story.game.render_help_end(lines)
+        lines.append(self.styled_footer())
+        self.msg_lines(lines)
+
     def do_switches(self):
         switch = self.switches[0].lower().strip()
+
+        if switch == "help":
+            self.do_help()
+            return
 
         path = self.lhs.split("|")
 

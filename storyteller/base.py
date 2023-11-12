@@ -42,7 +42,7 @@ class Template:
         """
         Change target to be this type of Template.
         """
-        target.stdb_fields.all().delete()
+        target.sheet.fields.all().delete()
         tinfo, created = SheetInfo.objects.get_or_create(
             game=self.game, character=target
         )
@@ -85,7 +85,7 @@ class Game:
         self.default_template = "Mortal"
 
     def __str__(self):
-        return getattr(self, "name", self.__class__.__name__)
+        return self.key
 
     def setup_templates(self, path: str):
         for k, v in callables_from_module(path).items():
@@ -97,3 +97,9 @@ class Game:
 
     def get_handlers(self, character):
         return self.handlers
+
+    def render_help(self, lines: list[str]):
+        pass
+
+    def render_help_end(self, lines: list[str]):
+        pass

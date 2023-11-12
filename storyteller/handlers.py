@@ -1,3 +1,13 @@
+"""
+This module holds the StorytellerHandler base classes which do the heavy lifting of manipulating the sheet data.
+
+Each Game object maintains its own list of handlers, which are usually loaded on its init via setup_handlers().
+
+The Handlers are loaded and accessed directly by the sheet commad's edit and display features.
+
+The handlers here are base implementations styled after World of Darkness and Exalted, though with some creativity they
+could likely be used for many other things.
+"""
 import typing
 import storyteller
 from django.conf import settings
@@ -26,6 +36,8 @@ class RawHandler:
     They are called by the Storyteller Character sheet to do things like set stats, add powers, etc.
 
     They are designed to work with the athanor.utils.Operation class.
+
+    This is an Abstract base class. Do not use directly.
     """
 
     system_name = "SHEET"
@@ -40,6 +52,12 @@ class RawHandler:
         self.game = game
 
     def __str__(self):
+        """
+        Handlers all have names, which is how they can be identified for the partial match search in the sheet editor.
+
+        Returns:
+            The name of the handler.
+        """
         return self.name
 
     def __repr__(self):
@@ -49,6 +67,10 @@ class RawHandler:
         self.owner.system_send(self.system_name, message, mapping={}, from_obj=from_obj)
 
     def permission_check(self, operation: Operation):
+        # TODO: Implement permission checks.
+        pass
+
+    def modify_path(self, path):
         pass
 
     def at_pre_operation(self, operation: Operation):
@@ -61,6 +83,7 @@ class RawHandler:
             if not isinstance(path, (list, set)):
                 operation.status = operation.st.HTTP_400_BAD_REQUEST
                 raise operation.ex(f"Path must be a list or set.")
+            self.modify_path(path)
             if len(path) < self.min_path_length:
                 operation.status = operation.st.HTTP_400_BAD_REQUEST
                 raise operation.ex(
@@ -83,30 +106,89 @@ class RawHandler:
     def template(self):
         return self.game.templates.get(self.owner.sheet.template, None)
 
-    def at_template_change(self, template):
+    def at_template_change(self):
         pass
+
+    def at_game_enter(self):
+        pass
+
+    def at_game_leave(self):
+        pass
+
+    def send_message(self, operation, message):
+        actor = operation.actor
+
+        self.owner.msg(f"Your {message}", from_obj=actor)
+
+        if actor != self.owner:
+            actor.msg(f"{self.owner}'s {message}", from_obj=actor)
+            staff_alert(f"{self.owner}'s {message}", senders=actor)
+
+        # operation.results["message"] = f"{self.owner}'s {message}"
+
+    def render_context(self, name, context):
+        return f"{name}: {context}" if context else name
+
+    def render_help_extra(self, lines: list[str]):
+        self.render_help_choices(lines)
+
+    def render_help_choices(self, lines):
+        if (get := getattr(self, "get_choices", None)) and callable(get):
+            if choices := get():
+                lines.append(f"  |wChoices|n: {', '.join([str(x) for x in choices])}")
+
+    def render_help_header(self, lines: list[str]):
+        lines.append(f"|c{self.name}:|n")
+
+    def render_help(self, lines: list[str]):
+        self.render_help_header(lines)
+        lines.append(f"  |wOperations|n: {', '.join(self.options)}")
+        self.render_help_extra(lines)
 
 
 class GameHandler(RawHandler):
+    """
+    The GameHandler is a special handler that is used to change the Game of a character.
+    It is usually found on character.ndb.story, and is accessed by storyteller.utils.get_story(character)
+    which handles a get-or-create approach to the handler.
+
+    The GameHandler still considers itself as a Handler despite being the 'root'.
+
+    Note that while a character's game CAN be changed in-play, doing so is highly destructive, it
+    necessitates cleaning a sheet.
+    """
+
     name = "Game"
     options = ("set",)
     min_path_length = 0
-    load_order = -10000
+    load_order = -999999999
+
+    def render_help_header(self, lines: list[str]):
+        lines.append(f"|c{self.name}:|n (Currently: |w{self.game}|n)")
+
+    def render_help_extra(self, lines: list[str]):
+        super().render_help_extra(lines)
+        lines.append(
+            f"  |rWARNING|n: Changing a character's game will wipe their sheet!"
+        )
 
     def __init__(self, owner):
         super().__init__(owner, None)
-        self.game = None
         self.handlers = [self]
         self.loaded = False
-        self.load()
 
-    def load(self):
+    def reload(self):
+        self.loaded = False
+        self.game = None
+        self.load(reloading=True)
+
+    def load(self, reloading=False):
         if self.loaded:
             return
         self.loaded = True
         created = False
         if not hasattr(self.owner, "sheet"):
-            self.game = storyteller.GAMES.get(settings.STORYTELLER_DEFAULT_MODULE, None)
+            self.game = storyteller.GAMES.get(settings.STORYTELLER_DEFAULT_GAME, None)
             if not self.game:
                 raise ValueError("No default game module found!")
             sheet = SheetInfo.objects.create(
@@ -122,6 +204,9 @@ class GameHandler(RawHandler):
                 raise ValueError("No module found for this game!")
         if not (handlers := self.game.get_handlers(self.owner)):
             raise ValueError("No handlers for this game!")
+        if reloading:
+            for handler in self.handlers:
+                handler.at_game_leave()
         self.handlers.clear()
         self.handlers.append(self)
         self.handlers.extend([handler(self.owner, self.game) for handler in handlers])
@@ -130,15 +215,17 @@ class GameHandler(RawHandler):
         template = self.template()
         if not template:
             raise ValueError("No template found for this game!")
-        if created:
+        if created or reloading:
             template.change(self.owner)
 
         for handler in self.handlers:
             handler.at_load()
 
-        if created:
+        if created or reloading:
             for handler in self.handlers:
-                handler.at_template_change(template)
+                handler.at_game_enter()
+            for handler in self.handlers:
+                handler.at_template_change()
 
     def get(self, handler: str):
         if not (handler := partial_match(handler, self.handlers)):
@@ -147,176 +234,204 @@ class GameHandler(RawHandler):
             )
         return handler
 
-    def get_game(self):
-        return self.game
+    def get_choices(self):
+        return list(storyteller.GAMES.values())
 
     def op_set(self, operation: Operation):
-        pass
+        v = operation.variables
+        if not (choices := self.get_choices()):
+            raise operation.ex(f"No game choices found.")
+        if not (game := partial_match(operation.variables["value"], choices)):
+            raise operation.ex(
+                f"No game found matching '{operation.variables['value']}'. Choices are: {', '.join([str(x) for x in choices])}"
+            )
+        if game.key == self.game.key:
+            raise operation.ex(f"{self.owner} is already in the {game} game.")
+        v["game_before"] = self.game
+        v["template_before"] = self.template()
+        message = f"Game was changed from {self.game} to: {game}."
+        self.send_message(operation, message)
+        sheet = self.owner.sheet
+        sheet.game = game.key
+        sheet.template = game.default_template
+        sheet.save()
+        self.reload()
 
 
 class BaseHandler(RawHandler):
-    plural_name = None
-    singular_name = None
-    remove_zero = False
-    min_value = 0
-    max_value = 10
-    system_name = "SHEET"
-    choices: list[str] = list()
-    dynamic_choices = False
-    use_context = False
-    enforce_context = False
+    """
+    Abstract base class used to provide a great deal of support utilities for other handlers.
+    """
 
-    def render_purchases(self, number) -> str:
-        return f"Purchase{'' if number == 1 else 's'}"
+    singular_name = "Stat"
+    plural_name = "Stat"
 
-    def get_choices(self) -> list[str]:
-        return list(self.choices)
+    def format_rank(self, rank):
+        return f"|w{rank}|n |c{self.singular_name}|n"
 
-    def get_choice(self, operation, entry: str) -> str:
-        if self.dynamic_choices:
-            return dramatic_capitalize(
-                validate_name(entry, thing_type=self.singular_name)
-            )
-        if not (choices := self.get_choices()):
-            raise operation.ex(f"No {self.singular_name} choices found.")
-        if not entry:
-            raise operation.ex(f"No {self.singular_name} name given.")
-        if not (choice := partial_match(entry, choices)):
-            raise operation.ex(
-                f"No {self.singular_name} found matching '{entry}'. Choices are: {', '.join(choices)}"
-            )
-        return choice
+    def should_delete(self, rank) -> bool:
+        return False
 
-    def check_context(self, operation, name: str, context: str) -> str:
-        context = context.strip()
-        if context:
-            context = validate_name(context, thing_type=f"{self.singular_name} Context")
-        return context
-
-    def check_tag(self, operation, name: str, context: str, tag: str) -> str:
-        tag = validate_name(tag, thing_type=f"{self.singular_name} Tag")
-        return dramatic_capitalize(tag)
-
-    def parse_context(self, operation, name: str) -> tuple[str, str]:
-        """
-        Given a name such as "Artifact" or "Artifact: Grand Daiklave", splits it into a tuple like ["Artifact", ""] or
-        ["Artifact", "Grand Daiklave"].
-
-        Args:
-            name: The name to parse.
-
-        Returns:
-            A tuple of [category, context]
-        """
-        if not name:
-            raise operation.ex(f"No {self.singular_name} name given.")
-
-        if ":" in name and not (self.use_context or self.enforce_context):
-            raise operation.ex(f"{self.singular_name} cannot have a context.")
-
-        if ":" in name:
-            category, context = [n.strip() for n in name.split(":", 1)]
-        else:
-            if self.enforce_context:
-                raise operation.ex(f"{self.singular_name} must have a context.")
-            category = name
-            context = ""
-        category = validate_name(category, thing_type=self.singular_name)
-        if context:
-            context = self.check_context(operation, category, context)
-
-        return category, context
-
-    def check_rating(self, operation, name: str, context: str, value: int) -> int:
-        # now coerce value to an int...
-        if not isinstance(value, int) and not value:
-            raise operation.ex(f"No value given for {name} {self.singular_name}.")
-        try:
-            rating = int(value) if not isinstance(value, int) else value
-        except operation.ex:
-            raise operation.ex(f"Value '{value}' is not an integer.")
-
-        if rating < self.min_value:
-            if self.remove_zero and rating == 0:
-                rating = 0
+    def at_post_operation(self, operation):
+        v = operation.variables
+        if rank := v.get("rank", None):
+            if v.get("delete", False):
+                rank.delete()
             else:
-                raise operation.ex(
-                    f"Value '{rating}' is less than the minimum value of {self.min_value}."
-                )
-        if rating > self.max_value:
+                rank.save()
+
+    def announce_op_set(self, operation: Operation):
+        v = operation.variables
+        rank = v["rank"]
+        delete = v.get("delete", False)
+
+        if delete:
+            message = f"{self.format_rank(rank)} was |wdeleted|n."
+        else:
+            message = f"{self.format_rank(rank)} was set to: |w{rank.value}|n. (Was |w{v.get('value_before', 0)}|n)"
+        self.send_message(operation, message)
+
+    announce_op_rank = announce_op_set
+
+    def check_tag(self, operation, tag: str) -> str:
+        tag = validate_name(tag, thing_type="Tag", ex_type=operation.ex)
+        return tag.lower()
+
+    def _op_tag(self, operation: Operation, rank, tag):
+        v = operation.variables
+        tag = self.check_tag(operation, tag)
+        if tag in rank.tags:
+            raise operation.ex(f"{rank} already has the tag: |w{tag}|n.")
+        v["rank"] = rank
+        v["tags_before"] = list(rank.tags)
+        v["tag_added"] = tag
+        rank.tags.append(tag)
+        self.announce_op_tag(operation)
+
+    def announce_op_tag(self, operation: Operation):
+        v = operation.variables
+        rank = v["rank"]
+        tag = v["tag_added"]
+        message = f"{self.format_rank(rank)} was tagged: |w{tag}|n."
+        self.send_message(operation, message)
+
+    def _op_untag(self, operation: Operation, rank, tag):
+        v = operation.variables
+        tag = self.check_tag(operation, tag)
+        if tag not in rank.tags:
             raise operation.ex(
-                f"Value '{rating}' is greater than the maximum value of {self.max_value}."
+                f"{self.format_rank(rank)} does not have the tag: |w{tag}|n."
             )
-        return rating
+        v["rank"] = rank
+        v["tags_before"] = list(rank.tags)
+        v["tag_removed"] = tag
+        rank.tags.remove(tag)
+        self.announce_op_untag(operation)
 
-    def announce(self, user: "DefaultCharacter", message: str, mapping: dict = None):
-        """
-        Send messages to relevant parties about what happened.
-        """
-        if mapping is None:
-            mapping = {}
-        mapping["user"] = user
-        mapping["target"] = self.owner
+    def announce_op_untag(self, operation: Operation):
+        v = operation.variables
+        rank = v["rank"]
+        tag = v["tag_removed"]
+        message = f"{self.format_rank(rank)} was untagged: |w{tag}|n."
+        self.send_message(operation, message)
 
-        user.system_send(self.system_name, message, mapping=mapping, from_obj=user)
+    def _op_tier(self, operation: Operation, rank, tier):
+        v = operation.variables
+        try:
+            tier = int(tier)
+        except ValueError:
+            raise operation.ex(f"Tier must be an integer.")
+        v["rank"] = rank
+        v["tier_before"] = rank.tier
+        rank.tier = tier
+        self.announce_op_tier(operation)
 
-        # If we are modifying ourselves, then there's no need to report further.
-        # That could only happen for a character in chargen, or a staff member
-        # editing themself for practice.
-        if user == self.owner:
-            return
+    def announce_op_tier(self, operation: Operation):
+        v = operation.variables
+        rank = v["rank"]
+        before = v["tier_before"]
+        message = f"{self.format_rank(rank)} was set to Tier: |w{rank.tier}|n. (Was |w{before}|n)"
+        self.send_message(operation, message)
 
-        self.owner.system_send(
-            self.system_name, message, mapping=mapping, from_obj=user
-        )
+    def check_module(self, operation: Operation, rank, mod):
+        mod = validate_name(mod, thing_type="Module", ex_type=operation.ex)
+        return dramatic_capitalize(mod)
 
-        # send the message to the staff alert channel too.
-        formatted = format_for_nobody(message, mapping)
-        staff_alert(user, formatted)
+    def _op_mod(self, operation: Operation, rank, mod):
+        v = operation.variables
+        v["rank"] = rank
+        mod = self.check_module(operation, rank, mod)
+        v["mod"] = mod
+        if mod in rank.modules:
+            v["value_before"] = rank.modules[mod]
+            rank.modules[mod] += 1
+        else:
+            v["value_before"] = 0
+            rank.modules[mod] = 1
+        self.announce_op_mod(operation)
 
-    def error(self, user: "DefaultCharacter", message: str):
-        """
-        Send an error message to the user.
-        """
-        user.system_send(self.system_name, message, mapping={}, from_obj=user)
+    def announce_op_mod(self, operation: Operation):
+        v = operation.variables
+        rank = v["rank"]
+        before = v["value_before"]
+        mod = v["mod"]
+        if before == 0:
+            message = f"{self.format_rank(rank)} had a module added: |w{mod}|n."
+        else:
+            message = f"{self.format_rank(rank)} purchased module again: |w{mod}|n. (Was |w{before}|n)"
+        self.send_message(operation, message)
+
+    def _op_unmod(self, operation: Operation, rank, mod):
+        v = operation.variables
+        v["rank"] = rank
+        mod = self.check_module(operation, rank, mod)
+        v["mod"] = mod
+        if mod not in rank.modules:
+            raise operation.ex(f"{rank} does not have the module: |w{mod}|n.")
+        v["value_before"] = rank.modules[mod]
+        rank.modules[mod] -= 1
+        if rank.modules[mod] <= 0:
+            del rank.modules[mod]
+        self.announce_op_unmod(operation)
+
+    def announce_op_unmod(self, operation: Operation):
+        v = operation.variables
+        rank = v["rank"]
+        before = v["value_before"]
+        mod = v["mod"]
+        if before == 1:
+            message = f"{self.format_rank(rank)} had a module removed: |w{mod}|n."
+        else:
+            message = f"{self.format_rank(rank)} removed a module: |w{mod}|n. (Was |w{before}|n)"
+        self.send_message(operation, message)
+
+    def _op_value(self, operation: Operation, rank, value):
+        v = operation.variables
+        v["rank"] = rank
+        v["value_before"] = rank.value
+        rank.value = value
+        v["delete"] = self.should_delete(rank)
+        if announce := getattr(self, f"announce_op_{operation.operation}", None):
+            announce(operation)
+
+    def _op_delete(self, operation: Operation, rank):
+        v = operation.variables
+        v["value_before"] = rank.value
+        rank.value = 0
+        if not self.should_delete(rank):
+            rank.value = v["value_before"]
+            raise operation.ex(f"Entry cannot be deleted.")
+        v["delete"] = True
+        v["rank"] = rank
+        self.announce_op_set(operation)
 
 
-class TemplateHandler(RawHandler):
-    """
-    The TemplateHandler is a bit different from most Handlers. It has one option, "set", which changes the character's
-    Template. That being the case, it doesn't need a "path" variable.
-    """
-
+class _TemplateHandler(RawHandler):
     options = ("set",)
-    name = "Templates"
     min_path_length = 0
-    load_order = -1000
 
-    def at_load(self):
-        pass
-
-    def all_templates(self):
+    def get_choices(self):
         return list(self.game.templates.values())
-
-    def op_set(self, operation: Operation):
-        value = operation.variables["value"]
-        if not (template := partial_match(value, self.all_templates())):
-            operation.status = operation.st.HTTP_400_BAD_REQUEST
-            raise operation.ex(
-                f"No template found matching '{value}'. Choices are: {', '.join(self.all_templates())}"
-            )
-
-        t = template.change(self.owner)
-        if operation.actor != self.owner:
-            self.msg(
-                f"{operation.actor} changed your Template to: {t}",
-                from_obj=operation.actor,
-            )
-            staff_alert(
-                f"{operation.actor} changed {self.owner}'s Template to: {t}",
-                senders=operation.actor,
-            )
-        operation.results["message"] = f"Template of {self.owner} was changed to: {t}"
 
     def get(self):
         return self.game.templates.get(self.owner.sheet.template, None)
@@ -327,7 +442,55 @@ class TemplateHandler(RawHandler):
         return None
 
 
-class FieldHandler(TemplateHandler):
+class TemplateHandler(_TemplateHandler):
+    """
+    The TemplateHandler is a bit different from most Handlers. It has one option, "set", which changes the character's
+    Template. That being the case, it doesn't need a "path" variable.
+    """
+
+    name = "Templates"
+    load_order = -1000
+
+    def render_help_header(self, lines: list[str]):
+        lines.append(f"|c{self.name}:|n (Currently: |w{self.template()}|n)")
+
+    def render_help_extra(self, lines: list[str]):
+        super().render_help_extra(lines)
+        lines.append(
+            f"  |rWARNING|n: Changing a character's Template may clear sections of their sheet!"
+        )
+
+    def at_load(self):
+        pass
+
+    def op_set(self, operation: Operation):
+        v = operation.variables
+        value = v["value"]
+        if not (templates := self.get_choices()):
+            operation.status = operation.st.HTTP_400_BAD_REQUEST
+            raise operation.ex(f"No templates found.")
+        if not (template := partial_match(value, templates)):
+            operation.status = operation.st.HTTP_400_BAD_REQUEST
+            raise operation.ex(
+                f"No template found matching '{value}'. Choices are: {', '.join([str(x) for x in templates])}"
+            )
+
+        if template.name == self.owner.sheet.template:
+            raise operation.ex(f"{self.owner} is already a {template}.")
+
+        v["template_before"] = self.owner.sheet.template
+        v["template"] = template.change(self.owner)
+        self.announce_op_set(operation)
+
+    def announce_op_set(self, operation):
+        v = operation.variables
+        t_b = v["template_before"]
+        t = v["template"]
+        message = f"|cTemplate|n was changed from |w{t_b}|n to: |w{t}|n."
+        self.send_message(operation, message)
+
+
+class FieldHandler(_TemplateHandler):
     """
     The FieldHandler is used to handle the various fields that a Template can have, and setting them.
 
@@ -341,8 +504,22 @@ class FieldHandler(TemplateHandler):
 
     name = "Fields"
     path_format = "<field>"
+    load_order = -500
 
-    def field_choices(self):
+    def render_help_extra(self, lines: list[str]):
+        t = self.template()
+        lines.append(f"  |wChoices|n:")
+        for choice in self.get_choices():
+            available = t.get_field_choices(self.owner, choice)
+            available_msg = (
+                "<anything>" if available is None else f"{', '.join(available)}"
+            )
+            lines.append(f"    |w{choice}|n: {available_msg}")
+            currently = self.get_field(choice)
+            if currently:
+                lines.append(f"      Currently: |w{currently}|n")
+
+    def get_choices(self):
         return self.get().get_fields(self.owner)
 
     def check_field(self, operation, field: str) -> str:
@@ -382,43 +559,175 @@ class FieldHandler(TemplateHandler):
         value = v["value"]
 
         field = self.check_field(operation, path[0])
-
+        v["field"] = field
         value = self.check_field_choice(operation, field, value)
+        v["value_before"] = self.get_field(field)
+        v["value"] = value
 
         t = self.get()
         t.do_set_field(self.owner, field, value)
+        self.announce_op_set(operation)
 
-        if operation.actor != self.owner:
-            self.msg(
-                f"{operation.actor} changed your {t} {field} to: {value}",
-                from_obj=operation.actor,
-            )
-            staff_alert(
-                f"{operation.actor} changed {self.owner}'s {t} {field} to: {value}",
-                senders=operation.actor,
-            )
-        operation.results[
-            "message"
-        ] = f"{t} {field} of {self.owner} was changed to: {value}"
+    def announce_op_set(self, operation):
+        v = operation.variables
+        field = v["field"]
+        value = v["value"]
+        value_before = v["value_before"]
+        message = f"|c{field}|n was set to: |w{value}|n. (Was |w{value_before}|n)"
+        self.send_message(operation, message)
 
 
 class StatHandler(BaseHandler):
-    min_value = 0
-    max_value = 10
     stat_category: str = None
     stat_model = Stat
     rank_model = StatRank
     reverse_relation = "stats"
+    custom_relations: list[str] = list()
     options = ("set",)
+    # If remove_zero is True, then a value of 0 will be deleted, unless it has customs.
+    # This is used for the set/rank operations.
+    remove_zero = False
+    # The minimum and maximum values allowed by set/rank operations.
+    min_value = 0
+    max_value = 10
+    # If dynamic_choices is True, then stat/merit names are picked by the player entering them.
+    # If not, the available choices are pulled from the get_choices() method, which defaults to
+    # self.choices.
+    dynamic_choices = False
+    # Context is used primarily by the Merit system to distinguish different purchases.
+    # But, it can also be used for specialties and similar situations where we need an 'additional field'
+    # to distinguish the purchase, like Artifact: The Distaff, or Melee: Swords.
+    use_context = False
+    # If enforce_context is True, then the context field is required.
+    enforce_context = False
+
+    singular_name = None
+
+    def render_help_header(self, lines: list[str]):
+        lines.append(f"|c{self.name}:|n (Type: |wStat|n)")
+
+    def render_help_choices(self, lines):
+        if self.dynamic_choices:
+            lines.append(f"  |wChoices|n: <anything>")
+        else:
+            lines.append(
+                f"  |wChoices|n: {', '.join([str(x) for x in self.get_choices()])}"
+            )
+
+    def render_help_extra(self, lines: list[str]):
+        super().render_help_extra(lines)
+        if self.use_context or self.enforce_context:
+            lines.append(
+                f"  |wContext|n: {'Required' if self.enforce_context else 'Optional'}"
+            )
+
+    @property
+    def name(self):
+        return self.stat_category
+
+    @property
+    def plural_name(self):
+        return self.stat_category
 
     def _get_reverse(self):
         return getattr(self.owner.sheet, self.reverse_relation)
 
+    def clear(self):
+        self._get_reverse().filter(stat__category__iexact=self.stat_category).delete()
+
+    def at_game_leave(self):
+        self.clear()
+
     def all(self):
         return {
             (srank.stat.name, srank.context): srank
-            for srank in self._get_reverse().filter(stat__category=self.stat_category)
+            for srank in self._get_reverse().filter(
+                stat__category__iexact=self.stat_category
+            )
         }
+
+    def get_choices(self) -> list[str]:
+        return getattr(self, "choices", list())
+
+    def get_choice(self, operation, entry: str) -> str:
+        if self.dynamic_choices:
+            return dramatic_capitalize(
+                validate_name(
+                    entry, thing_type=self.singular_name, ex_type=operation.ex
+                )
+            )
+        if not (choices := self.get_choices()):
+            raise operation.ex(f"No {self.singular_name} choices found.")
+        if not entry:
+            raise operation.ex(f"No {self.singular_name} name given.")
+        if not (choice := partial_match(entry, choices)):
+            raise operation.ex(
+                f"Nothing found matching '{entry}'. Choices are: {', '.join(choices)}"
+            )
+        return choice
+
+    def check_context(self, operation, name: str, context: str) -> str:
+        context = context.strip()
+        if context:
+            context = validate_name(
+                context,
+                thing_type=f"{self.singular_name} Context",
+                ex_type=operation.ex,
+            )
+        return context
+
+    def parse_context(self, operation, name: str) -> tuple[str, str]:
+        """
+        Given a name such as "Artifact" or "Artifact: Grand Daiklave", splits it into a tuple like ["Artifact", ""] or
+        ["Artifact", "Grand Daiklave"].
+
+        Args:
+            name: The name to parse.
+
+        Returns:
+            A tuple of [category, context]
+        """
+        if not name:
+            raise operation.ex(f"No name given.")
+
+        if ":" in name and not (self.use_context or self.enforce_context):
+            raise operation.ex(f"{self.plural_name} cannot have a context.")
+
+        if ":" in name:
+            category, context = [n.strip() for n in name.split(":", 1)]
+        else:
+            if self.enforce_context:
+                raise operation.ex(f"{self.plural_name} must have a context.")
+            category = name
+            context = ""
+        category = validate_name(
+            category, thing_type=self.singular_name, ex_type=operation.ex
+        )
+        if context:
+            context = self.check_context(operation, category, context)
+
+        return category, context
+
+    def check_rating(self, operation, name: str, context: str, value: int) -> int:
+        # now coerce value to an int...
+        if not isinstance(value, int) and not value:
+            raise operation.ex(
+                f"No value given for {self.render_context(name, context)}."
+            )
+        try:
+            rating = int(value) if not isinstance(value, int) else value
+        except operation.ex:
+            raise operation.ex(f"Value '{value}' is not an integer.")
+
+        if rating < self.min_value:
+            raise operation.ex(
+                f"Value '{rating}' is less than the minimum value of {self.min_value}."
+            )
+        if rating > self.max_value:
+            raise operation.ex(
+                f"Value '{rating}' is greater than the maximum value of {self.max_value}."
+            )
+        return rating
 
     def op_set(self, operation: Operation):
         v = operation.variables
@@ -427,20 +736,9 @@ class StatHandler(BaseHandler):
 
         stat_name, context = self.parse_context(operation, path[0])
         rating = self.check_rating(operation, stat_name, context, value)
-        stat = self.check_stat(operation, stat_name)
-        srank = self.check_srank(operation, stat, context)
-        operation.variables["srank"] = srank
-        operation.variables["srank_before"] = srank.value
+        srank = self.check_srank(operation, stat_name, context)
 
-        if self.remove_zero and value <= 0 and self.should_delete(srank):
-            self.delete(operation, srank)
-        else:
-            srank.value = rating
-
-        self.announce_op_set(operation)
-
-    def announce_op_set(self, operation: Operation):
-        pass
+        self._op_value(operation, srank, rating)
 
     def op_rank(self, operation: Operation):
         v = operation.variables
@@ -449,20 +747,10 @@ class StatHandler(BaseHandler):
 
         stat_name, context = self.parse_context(operation, path[0])
         rating = self.check_rating(operation, stat_name, context, value)
-        stat = self.check_stat(operation, stat_name)
-        srank = self.check_srank(operation, stat, context, partial=True)
-        operation.variables["srank"] = srank
-        operation.variables["srank_before"] = srank.value
-
-        if self.remove_zero and value <= 0 and self.should_delete(srank):
-            self.delete(operation, srank)
-        else:
-            srank.value = rating
-
-        self.announce_op_rank(operation)
-
-    def announce_op_rank(self, operation: Operation):
-        pass
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        self._op_value(operation, srank, rating)
 
     def op_context(self, operation: Operation):
         v = operation.variables
@@ -470,9 +758,10 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        stat = self.check_stat(operation, stat_name)
-        srank = self.check_srank(operation, stat, context, partial=True)
-        operation.variables["srank"] = srank
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        v["rank"] = srank
 
         new_context = self.check_context(operation, stat_name, value)
 
@@ -483,15 +772,21 @@ class StatHandler(BaseHandler):
         )
         if opposing and opposing != srank:
             raise operation.ex(
-                f"{self.render_rank(srank)} cannot be renamed to {new_context} because {self.render_rank(opposing)} already has that context."
+                f"{self.render_context(stat_name, context)} cannot be renamed to {new_context} because {opposing} already has that context."
             )
-        operation.variables["context_before"] = srank.context
+        v["context_before"] = srank.context
+        v["format_before"] = self.format_rank(srank)
         srank.context = new_context
 
         self.announce_op_context(operation)
 
     def announce_op_context(self, operation: Operation):
-        pass
+        v = operation.variables
+        rank = v["rank"]
+        before = v["context_before"]
+        f_before = v["format_before"]
+        message = f"{f_before} was renamed to {self.render_context(rank.stat.name, rank.context)}.)"
+        self.send_message(operation, message)
 
     def op_describe(self, operation: Operation):
         v = operation.variables
@@ -499,85 +794,164 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        stat = self.check_stat(operation, stat_name)
-        srank = self.check_srank(operation, stat, context, partial=True)
-        operation.variables["srank"] = srank
-        operation.variables["description_before"] = srank.description
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        v["rank"] = srank
+        v["description_before"] = srank.description
 
         srank.description = value
 
         self.announce_op_describe(operation)
 
     def announce_op_describe(self, operation: Operation):
-        pass
-
-    def delete(self, operation: Operation, srank: StatRank) -> str:
-        if not self.should_delete(srank):
-            raise operation.ex(f"{srank} cannot be deleted.")
-        operation.variables["deleted"] = True
-
-    def at_post_operation(self, operation):
-        if srank := operation.variables.get("srank", None):
-            if operation.variables.get("deleted", False):
-                srank.delete()
-            else:
-                srank.save()
+        v = operation.variables
+        rank = v["rank"]
+        before = v["description_before"]
+        message = f"{self.format_rank(rank)} was described: |w{rank.description}|n. (Was |w{before}|n)"
+        self.send_message(operation, message)
 
     def get_choices(self) -> list[str]:
-        pass
+        return list()
 
-    def check_stat(self, operation, name: str):
-        choice = self.get_choice(operation, name)
+    def _get_stat(self, name: str):
         stat, created = self.stat_model.objects.get_or_create(
-            category=self.stat_category, name=choice
+            category=self.stat_category, name=name
         )
         return stat
 
+    def check_stat(self, operation, name: str):
+        choice = self.get_choice(operation, name)
+        return self._get_stat(choice)
+
     def check_srank(
-        self, operation, stat, context: str, partial: bool = False
+        self,
+        operation,
+        stat: str,
+        context: str,
+        partial: bool = False,
+        create: bool = True,
     ) -> StatRank:
         r = self._get_reverse()
+        if create:
+            partial = False
+
         if partial:
             candidates = r.filter(stat__category=self.stat_category)
             if context:
                 candidates = candidates.exclude(context="")
                 if not candidates:
-                    raise operation.ex(
-                        f"No {self.singular_name} found matching '{context}'."
-                    )
+                    raise operation.ex(f"No entry found matching '{context}'.")
                 if not (srank := partial_match(context, candidates)):
                     raise operation.ex(
-                        f"No {self.singular_name} found matching '{context}'. Choices are: {', '.join(candidates)}"
+                        f"No entry found matching '{context}'. Choices are: {', '.join(candidates)}"
                     )
                 return srank
             else:
                 candidates = candidates.filter(context="")
                 if not candidates:
-                    raise operation.ex(
-                        f"No {self.singular_name} found matching '{stat}'."
-                    )
+                    raise operation.ex(f"No entry found matching '{stat}'.")
                 if not (srank := candidates.first()):
-                    raise operation.ex(
-                        f"No {self.singular_name} found matching '{stat}'."
-                    )
+                    raise operation.ex(f"No entry found matching '{stat}'.")
                 return srank
 
-        if not (srank := r.filter(stat=stat, context__iexact=context).first()):
-            srank, srank_created = r.get_or_create(stat=stat, context=context)
+        stat_dict = {"category": self.stat_category, "name": stat}
+
+        if not (
+            srank := r.filter(
+                context__iexact=context,
+                **{f"stat__{k}__iexact": v for k, v in stat_dict.items()},
+            ).first()
+        ):
+            if create:
+                stat = self.check_stat(operation, stat)
+                srank, created = r.get_or_create(stat=stat, context=context)
+            else:
+                raise operation.ex(
+                    f"No entry found matching '{self.render_context(stat, context)}'."
+                )
         else:
             srank.context = context
         return srank
 
-    def should_delete(self, srank) -> bool:
-        return True
+    def has_customs(self, rank) -> bool:
+        for rel in self.custom_relations:
+            if getattr(rank, rel).count():
+                return True
+        return False
+
+    def should_delete(self, rank) -> bool:
+        return rank.value <= 0 and self.remove_zero and not self.has_customs(rank)
+
+    def op_tier(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        stat_name, context = self.parse_context(operation, path[0])
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        self._op_tier(operation, srank, value)
+
+    def op_tag(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        stat_name, context = self.parse_context(operation, path[0])
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        self._op_tag(operation, srank, value)
+
+    def op_untag(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        stat_name, context = self.parse_context(operation, path[0])
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        self._op_untag(operation, srank, value)
+
+    def op_mod(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        stat_name, context = self.parse_context(operation, path[0])
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        self._op_mod(operation, srank, value)
+
+    def op_unmod(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        stat_name, context = self.parse_context(operation, path[0])
+        srank = self.check_srank(
+            operation, stat_name, context, partial=True, create=False
+        )
+        self._op_unmod(operation, srank, value)
 
 
 class AdvantageHandler(StatHandler):
+    """
+    The AdvantageHandler is meant to handle what Storyteller often calls Advantages.
+
+    The permanent Willpower stat. Essence in Exalted, Generation/Blood Potency for Vampires, Arete/Gnosis for Mages, etc.
+
+    The list of available Advantages usually differs by Template, so by default this handler checks template.advantages.
+    """
+
     stat_category = "Advantages"
-    plural_name = "Advantages"
     singular_name = "Advantage"
-    name = "Advantages"
     options = ("set",)
+    load_order = -50
 
     def get_choices(self) -> list[str]:
         return getattr(self.template(), "advantages", list())
@@ -590,270 +964,684 @@ class AdvantageHandler(StatHandler):
 
 
 class AttributeHandler(StatHandler):
+    """
+    The AttributeHandler is meant to handle what Storyteller often calls Attributes.
+    Strength, Dexterity, Stamina, Charisma, etc.
+
+    The list of available Attributes usually differs by Game, so by default this handler checks game.attributes.
+    """
+
     stat_category = "Attributes"
-    plural_name = "Attributes"
     singular_name = "Attribute"
-    name = "Attributes"
     options = (
         "set",
         "rank",
     )
+    load_order = 0
 
     def get_choices(self) -> list[str]:
-        return self.game.attributes
+        return getattr(self.game, "attributes", list())
+
+    def at_game_enter(self):
+        """
+        With rare exceptions, Attributes all start at 1.
+        """
+        r = self._get_reverse()
+        for name in self.get_choices():
+            stat = self._get_stat(name)
+            rank, created = r.get_or_create(stat=stat)
+            if rank.value < 1:
+                rank.value = 1
+                rank.save()
 
 
 class AbilityHandler(StatHandler):
+    """
+    Each Game has a list of Abilities, which are usually the same across all Templates.
+
+    These are things such as Melee, Brawl, Firearms, Survival, Animal Ken, Streetwise, Stealth, etc.
+    """
+
     stat_category = "Abilities"
-    plural_name = "Abilities"
     singular_name = "Ability"
-    name = "Abilities"
     options = (
         "set",
         "rank",
     )
+    load_order = 10
 
     def get_choices(self) -> list[str]:
         return self.game.abilities
 
 
 class MeritHandler(StatHandler):
+    """
+    Merits are different from Stats in that they usually can be purchased multiple times for different sitautions.
+    For instance, the Merit "Artifact" in Exalted can be purchased multiple times for different artifacts.
+
+    To handle this, Merits have a 'context' field, which is used to differentiate between different purchases.
+    Example - Artifact: Grand Daiklave
+    """
+
     stat_category = "Merits"
-    name = "Merits"
+    singular_name = "Merit"
     options = ("set", "delete", "rank", "rename", "describe")
     use_context = True
     dynamic_choices = True
+    load_order = 30
 
 
 class SpecialtyHandler(MeritHandler):
+    """
+    Most of the WoD games allow for specialties. Sometimes these add bonus dice to a roll,
+    at other times they alter the dice roll rules.
+
+    Most of the time, you just purchase the specialty and have it. Exalted 2e allows you to purchase a specialty
+    up to +3, though.
+    """
+
     stat_category = "Specialties"
-    plural_name = "Specialties"
     singular_name = "Specialty"
     max_value = 1
     remove_zero = True
-    name = "Specialties"
     options = ("set", "remove", "rank", "delete", "rename")
+    enforce_context = True
+    load_order = 20
+
+    def get_choices(self) -> list[str]:
+        """
+        Usually, specialties branch off of an Ability, so we need to know what abilities are available.
+        In Exalted 2e, Lunars with a specific Charm can get Specialties for their Attributes.
+        """
+        return self.game.abilities
 
 
 class FlawHandler(MeritHandler):
+    """
+    Not every game uses Flaws, but they work like Merits when they do.
+    """
+
     stat_category = "Flaws"
-    name = "Flaws"
+    singular_name = "Flaw"
+    load_order = 40
 
 
 class BackgroundHandler(MeritHandler):
+    """
+    Sometimes Merits and Backgrounds are the same thing depending on game, sometimes they're different systems.
+    Either way, they both work like 'Merits' do.
+    """
+
     stat_category = "Backgrounds"
-    name = "Backgrounds"
+    singular_name = "Background"
+    load_order = 50
 
 
 class PowerHandler(BaseHandler):
-    plural_name = None
-    singular_name = None
-    options = (
-        "add",
-        "remove",
-        "delete",
-    )
+    """
+    The PowerHandler is meant to handle complex categorized powers.
+
+    The primary example is Charms and Spells from Exalted, which can be categorized as such:
+
+    (in order of: family, category, subcategory, name)
+    ("Charms", "Solar", "Melee", "Fire and Stones Strike")
+    ("Charms", "Lunar", "Intelligence", "Counting the Elephant's Wrinkles")
+    ("Spells", "Sorcery", "Terrestrial", "Demon of the First Circle")
+    ("Spells", "Necromancy", "Shadowlands", "Summon Ghost")
+
+    Werewolf Gifts are also doable.
+    ("Gifts", "Ragabash", "1", "Open Seal")
+
+    This is an abstract base class which cannot be used directly.
+
+    It requires a family to be set, and customization to the get_ operations to determine
+    possible choices at each stage, and relevant announce_  operations defined.
+    """
+
+    options = ("add", "remove", "delete", "tag", "untag", "tier", "mod", "unmod")
     family = None
+    min_path_length = 2
+    path_format = "<category>,<subcategory>"
+    power_model = Power
+    reverse_relation = "powers"
+    singular_name = "power"
+    dynamic_category = False
+    dynamic_subcategory = False
+    load_order = 50
 
-    def render_name(self):
-        return "Name"
+    def clear(self):
+        self._get_reverse().filter(power__family__iexact=self.family).delete()
 
-    def render_cat_name(self, category: str) -> str:
-        return f"{category}"
+    @property
+    def name(self):
+        return self.family
 
-    def render_subcat_name(self, category: str, subcategory: str) -> str:
-        return f"{category} {subcategory}"
+    @property
+    def plural_name(self):
+        return self.family
 
-    def render_thing_name(self, category: str, subcategory: str, name: str) -> str:
-        return f"{category} {subcategory} {self.singular_name}"
+    def render_help_header(self, lines: list[str]):
+        lines.append(f"|c{self.name}:|n (Type: |wPower|n)")
 
-    def get_category(self, name: str) -> str:
+    def render_category(self, category, plural=True):
+        return f"|c{category} {self.plural_name if plural else self.singular_name}|n"
+
+    def render_subcategory(self, category, subcategory, plural=True):
+        return f"|c{category} {subcategory} {self.plural_name if plural else self.singular_name}|n"
+
+    def format_rank(self, rank):
+        return f"{self.render_subcategory(rank.power.category, rank.power.subcategory, plural=False)}|c:|n |w{rank.power.name}|n"
+
+    def _get_reverse(self):
+        return getattr(self.owner.sheet, self.reverse_relation)
+
+    def at_game_leave(self):
+        self._get_reverse().all().delete()
+
+    def get_category_choices(self, operation: Operation) -> list[str]:
+        return self.get_choices()
+
+    def get_choices(self):
+        return list()
+
+    def get_category(self, operation: Operation, name: str) -> str:
         if not name:
-            raise ValueError(f"No {self.render_name()} category given.")
-        if not (category := partial_match(name, self.categories.keys())):
-            raise ValueError(
-                f"No {self.render_name()} category found matching '{name}'. Choices are: {', '.join(self.categories.keys())}"
-            )
-        return category
+            raise operation.ex(f"No {self.family} category given.")
+        if self.dynamic_category:
+            category = validate_name(name, thing_type=self.family)
+            return dramatic_capitalize(category)
 
-    def get_subcategory(self, category: str, name: str) -> str:
-        if not name:
-            raise ValueError(f"No {self.render_cat_name(category)} category given.")
-        choices = self.categories[category]
+        if not (choices := self.get_category_choices(operation)):
+            raise operation.ex(f"No {self.family} categories found.")
 
-        # deal with that pesky Martial Arts category.
+        # deal with weird generative choices.
         if callable(choices):
             choices = choices(self.owner)
 
+        if not choices:
+            raise operation.ex(f"No categories found.")
+
+        if not (category := partial_match(name, choices)):
+            raise operation.ex(
+                f"No {self.family} category found matching '{name}'. Choices are: {', '.join(choices)}"
+            )
+        return category
+
+    def get_subcategory_choices(self, operation: Operation, category: str):
+        return list()
+
+    def get_subcategory(self, operation: Operation, category: str, name: str) -> str:
+        if not name:
+            raise operation.ex(
+                f"No {self.render_category(category)} sub-category given."
+            )
+
+        if self.dynamic_subcategory:
+            category = validate_name(name, thing_type=self.render_category(category))
+            return dramatic_capitalize(category)
+
+        if not (choices := self.get_subcategory_choices(operation, category)):
+            raise operation.ex(
+                f"No {self.render_category(category)} sub-categories found."
+            )
+
+        # deal with weird generative choices.
+        if callable(choices):
+            choices = choices(self.owner)
+
+        if not choices:
+            raise operation.ex(
+                f"No {self.render_category(category)} sub-categories found."
+            )
+
         if not (subcategory := partial_match(name, choices)):
             raise ValueError(
-                f"No {category} {self.plural_name} subcategory found matching '{name}'. Choices are: {', '.join(choices)}"
+                f"No {self.render_category(category)} sub-categories found matching '{name}'. Choices are: {', '.join(choices)}"
             )
 
         return subcategory
 
-    def add(self, category: str, subcategory: str, name: str, value: int = 1):
-        return self.do_base(category, subcategory, name, value, self.do_add)
-
-    def remove(self, category: str, subcategory: str, name: str, value: int = 1):
-        return self.do_base(category, subcategory, name, value, self.do_remove)
-
-    def make_key(self, category: str, subcategory: str) -> str:
-        return f"{category}:{subcategory}"
-
-    def check_name(self, category: str, subcategory: str, name: str) -> str:
+    def get_name(
+        self, operation: Operation, category: str, subcategory: str, name: str
+    ) -> str:
         name = validate_name(
-            name, thing_type=f"{category} {subcategory} {self.plural_name}"
+            name,
+            thing_type=self.render_subcategory(category, subcategory, plural=False),
+            ex_type=operation.ex,
         )
         return dramatic_capitalize(name)
 
-    def do_base(
-        self, category: str, subcategory: str, name: str, value: int, method: callable
-    ) -> str:
-        found_category = self.get_category(category)
-        found_subcategory = self.get_subcategory(found_category, subcategory)
-        found_name = self.check_name(found_category, found_subcategory, name)
-        try:
-            value = int(value)
-        except ValueError:
-            raise ValueError(f"Value '{value}' is not an integer.")
-        power, created = Power.objects.get_or_create(
-            family=self.family,
-            category=category,
-            subcategory=subcategory,
-            name=found_name,
-        )
-        rank, rank_created = self.owner.stdb_powers.get_or_create(power=power)
-        return method(rank, value)
-
-    def render_rank(self, rank: PowerRank) -> str:
-        return f"{rank.power.category} {rank.power.subcategory} {self.singular_name}: {rank.power.name}"
-
-    def render_new_value(self, rank: PowerRank, before: int) -> str:
-        return f"{self.render_rank(rank)} is now rated at: {rank.value} {self.render_purchases(rank.value)} (was {before})"
-
-    def render_delete(self, rank: PowerRank, before: int) -> str:
-        return f"{self.render_rank(rank)} was removed (was {before} {self.render_purchases(before)})"
-
-    def do_add(self, rank: PowerRank, value: int) -> str:
-        before = rank.value
-        rank.value += value
-        rank.save()
-        return self.render_new_value(rank, before)
-
-    def do_remove(self, rank: PowerRank, value: int) -> str:
-        before = rank.value
-        rank.value -= value
-        if rank.value <= 0:
-            message = self.render_delete(rank, before)
-            power = rank.power
-            rank.delete()
-            if not power.ranks.all().count():
-                power.delete()
-            return message
-        else:
-            rank.save()
-            return self.render_new_value(rank, before)
-
-    def prepare_args(self, path, value, method) -> list:
-        if not len(path) == 2:
-            raise ValueError(
-                f"Invalid path for {self.singular_name}. Need <category>|<subcategory>."
+    def get_power(
+        self, operation: Operation, category: str, subcategory: str, name: str
+    ) -> Power:
+        if not (
+            power := self.power_model.objects.filter(
+                family__iexact=self.family,
+                category__iexact=category,
+                subcategory__iexact=subcategory,
+                name__iexact=name,
+            ).first()
+        ):
+            power = self.power_model.objects.create(
+                family=self.family,
+                category=category,
+                subcategory=subcategory,
+                name=name,
             )
-        return path + [value]
+        return power
+
+    def get_power_rank(
+        self,
+        operation: Operation,
+        category: str,
+        subcategory: str,
+        name: str,
+        create=True,
+    ) -> PowerRank:
+        rev = self._get_reverse()
+        power_dict = {
+            "family": self.family,
+            "category": category,
+            "subcategory": subcategory,
+            "name": name,
+        }
+
+        if not (
+            rank := rev.filter(
+                **{
+                    f"power__{k}__iexact": v
+                    for k, v in power_dict.items()
+                    if v is not None
+                },
+            ).first()
+        ):
+            if create:
+                power = self.power_model.objects.create(**power_dict)
+                rank = rev.create(power=power)
+            else:
+                power_dict.pop("name", None)
+                if not (choices := rev.filter(**power_dict)):
+                    raise operation.ex(
+                        f"No {self.render_subcategory(category, subcategory)} found matching '{name}'."
+                    )
+                if not (rank := partial_match(name, choices)):
+                    raise operation.ex(
+                        f"No {self.render_subcategory(category, subcategory)} found matching '{name}'. Choices are: "
+                        f"{', '.join([str(x) for x in choices])}"
+                    )
+        return rank
+
+    def op_add(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory]
+        # name is value
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        name = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, category, subcategory, name)
+        v["rank_before"] = rank.value
+        rank.value += 1
+        v["rank"] = rank
+        self.announce_op_set(operation)
+
+    def at_post_operation(self, operation):
+        if rank := operation.variables.get("rank", None):
+            if rank.value <= 0:
+                rank.delete()
+            else:
+                rank.save()
+
+    def op_remove(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory]
+        # name is value
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        name = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        v["rank_before"] = rank.value
+        rank.value -= 1
+        v["delete"] = self.should_delete(rank)
+        v["rank"] = rank
+        self.announce_op_set(operation)
+
+    def should_delete(self, rank) -> bool:
+        return rank.value <= 0
+
+    def op_delete(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory]
+        # name is value
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        name = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        self._op_delete(operation, rank)
+
+    def op_tag(self, operation: Operation):
+        """
+        This works very similarly to op_add, but the path length is 3 for (category, subcategory, name)
+        and value is a string tag that will be added to the rank.data["tags"] set. Created if it doesn't exist.
+        """
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory, name]
+        # value is the tag
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        if not len(path) >= 3:
+            raise operation.ex(f"No power name given.")
+        name = self.get_name(operation, category, subcategory, path[2])
+        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        self._op_tag(operation, rank, value)
+
+    def op_untag(self, operation: Operation):
+        """
+        This works very similarly to op_remove, but the path length is 3 for (category, subcategory, name)
+        and value is a string tag that will be removed from the rank.data["tags"] set.
+        """
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory, name]
+        # value is the tag
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        if not len(path) >= 3:
+            raise operation.ex(f"No power name given.")
+        name = self.get_name(operation, category, subcategory, path[2])
+        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        self._op_untag(operation, rank, value)
+
+    def op_mod(self, operation: Operation):
+        """
+        This works very similarly to op_add, but the path length is 3 for (category, subcategory, name)
+        and value is a string mod that will be added to the rank.data["mods"] set. Created if it doesn't exist.
+        """
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory, name]
+        # value is the mod
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        if not len(path) >= 3:
+            raise operation.ex(f"No power name given.")
+        name = self.get_name(operation, category, subcategory, path[2])
+        if not (
+            rank := self.get_power_rank(
+                operation, category, subcategory, name, create=False
+            )
+        ):
+            raise operation.ex(f"Entry not found to mod.")
+        self._op_mod(operation, rank, value)
+
+    def op_unmod(self, operation: Operation):
+        """
+        This works very similarly to op_remove, but the path length is 3 for (category, subcategory, name)
+        and value is a string mod that will be removed from the rank.data["mods"] set.
+        """
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory, name]
+        # value is the mod
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        if not len(path) >= 3:
+            raise operation.ex(f"No power name given.")
+        name = self.get_name(operation, category, subcategory, path[2])
+        if not (
+            rank := self.get_power_rank(
+                operation, category, subcategory, name, create=False
+            )
+        ):
+            raise operation.ex(f"Entry not found to unmod.")
+        self._op_unmod(operation, rank, value)
+
+    def op_tier(self, operation: Operation):
+        """
+        This works very similarly to op_add, but the path length is 3 for (category, subcategory, name)
+        and value is an integer that will be added to the rank.data["tiers"] set. Created if it doesn't exist.
+        """
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # Family is known due to self.family.
+        # the path should be [category, subcategory, name]
+        # value is the tier
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        if not len(path) >= 3:
+            raise operation.ex(
+                f"No {self.render_subcategory(category, subcategory)} name given."
+            )
+        name = self.get_name(operation, category, subcategory, path[2])
+        if not (
+            rank := self.get_power_rank(
+                operation, category, subcategory, name, create=False
+            )
+        ):
+            raise operation.ex(
+                f"{self.render_subcategory(category, subcategory, plural=False)} not found to tier."
+            )
+        self._op_tier(operation, rank, value)
 
 
 class CustomPowerHandler(BaseHandler):
+    """
+    CustomPowers are usually branched off context-stat combinations.
+
+    This is primarily used in Exalted 3rd Edition to cover Artifact Evocations.
+
+    An example, the character would have the merit, "Artifact: The Distaff", and
+    their custom power is the evocation, "Poppet-Knitting Practice". Since Evocations are
+    unique, they are simply stored alongside the purchase because there's
+    no point in creating a normalized database of them.
+
+    This is an Abstract base Class. it cannot be used directly.
+
+    To use it, specify the proper stat_category and stat that it would target.
+    For example, stat_category="Merits", stat="Artifact"
+    """
+
     stat_category: str = None
     stat: str = None
-    singular_name: str = None
-    options = ("add", "remove")
+    options = ("add", "remove", "delete", "tag", "untag")
+    reverse_relation = "stats"
+    rank_reverse_relation = "customs"
+    min_path_length = 1
+    load_order = 100
 
-    def add(
-        self, stat_name: str, stat_context: str, power_name: str, value: int = 1
-    ) -> str:
-        return self.do_base(stat_name, stat_context, power_name, value, self.do_add)
+    def _get_reverse(self):
+        return getattr(self.owner.sheet, self.reverse_relation)
 
-    def remove(
-        self, stat_name: str, stat_context: str, power_name: str, value: int = 1
-    ) -> str:
-        return self.do_base(stat_name, stat_context, power_name, value, self.do_remove)
+    def _get_rank_reverse(self, rank):
+        return getattr(rank, self.rank_reverse_relation)
 
-    def check_name(self, stat_name: str) -> Stat:
-        candidates = self.owner.stdb_stats.filter(
-            stat__category=self.stat_category, stat__name=self.stat
-        ).exclude(context="")
-        if not (stat := partial_match(stat_name, candidates)):
-            raise ValueError(
-                f"No {self.singular_name} found matching '{stat_name}'. Choices are: {', '.join(candidates)}"
-            )
-        return stat
-
-    def check_context(self, stat: Stat, stat_context: str) -> StatRank:
-        if not stat_context:
-            raise ValueError(f"No {self.singular_name} context given.")
+    def get_context(self, operation: Operation, name: str):
+        context = validate_name(
+            name,
+            thing_type=f"Context",
+            ex_type=operation.ex,
+        )
+        r = self._get_reverse()
         if not (
-            candidates := self.owner.stdb_stats.filter(stat=stat).exclude(content="")
+            choices := r.filter(
+                stat__category__iexact=self.stat_category, stat__name__iexact=self.stat
+            ).exclude(context="")
         ):
-            raise ValueError(f"No {self.stat_category} variations found for {stat}.")
-        if not (srank := partial_match(stat_context, candidates)):
-            raise ValueError(
-                f"No {self.singular_name} context found matching '{stat_context}'. Choices are: {', '.join(candidates)}"
+            raise operation.ex(f"No choices found.")
+        if not (context := partial_match(context, choices, key=lambda x: x.context)):
+            raise operation.ex(
+                f"No context found matching '{context}'. Choices are: {', '.join([x.context for x in choices])}"
             )
-        return srank
 
-    def do_base(
-        self,
-        stat_name: str,
-        stat_context: str,
-        power_name: str,
-        value: int,
-        method: callable,
-    ) -> str:
-        stat = self.check_name(stat_name)
-        srank = self.check_context(stat, stat_context)
-        power_name = validate_name(power_name, thing_type=self.singular_name)
-        try:
-            value = int(value)
-        except ValueError:
-            raise ValueError(f"Value '{value}' is not an integer.")
-        if not (cpower := srank.powers.filter(name=power_name).first()):
-            cpower, cpower_created = srank.powers.get_or_create(name=power_name)
-        else:
-            cpower.name = power_name
-        return method(cpower, value)
+        return context
 
-    def render_rank(self, rank: CustomPower) -> str:
-        return f"{rank.stat.context} {self.singular_name}: {rank.name}"
+    def get_power(self, operation: Operation, rank, name: str, create=True):
+        name = validate_name(
+            name,
+            thing_type=f"Name",
+            ex_type=operation.ex,
+        )
+        name = dramatic_capitalize(name)
 
-    def render_new_value(self, rank: CustomPower, before: int) -> str:
-        return f"{self.render_rank(rank)} is now rated at: {rank.value} {self.render_purchases(rank.value)} (was {before})"
+        r = self._get_rank_reverse(rank)
 
-    def render_delete(self, rank: CustomPower, before: int) -> str:
-        return f"{self.render_rank(rank)} was removed (was {before} {self.render_purchases(before)})"
+        if not (power := r.filter(name__iexact=name).first()):
+            if not create:
+                if not (choices := r.all()):
+                    raise operation.ex(f"No choices found.")
+                if not (power := partial_match(name, choices)):
+                    raise operation.ex(
+                        f"No power found matching '{name}'. Choices are: {', '.join([x.name for x in choices])}"
+                    )
+                return power
+            power = r.create(name=name)
+        return power
 
-    def do_add(self, cpower: CustomPower, value: int):
-        before = cpower.value
-        cpower.value += value
-        cpower.save()
-        return self.render_new_value(cpower, before)
+    def op_add(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
 
-    def do_remove(self, cpower: CustomPower, value: int):
-        before = cpower.value
-        cpower.value -= value
-        if cpower.value <= 0:
-            message = self.render_delete(cpower, before)
-            cpower.delete()
-            return message
-        else:
-            cpower.save()
-            return self.render_new_value(cpower, before)
+        # in this case, the path should be just [context], and value is the power name.
+        rank = self.get_stat_rank(operation, path[0])
+        power = self.get_power(operation, rank, value)
+        v["power_before"] = power.value
+        v["power"] = power
+        power.value += 1
+        self.announce_op_add(operation)
+
+    def announce_op_add(self, operation: Operation):
+        pass
+
+    def op_remove(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # in this case, the path should be just [context], and value is the power name.
+        rank = self.get_stat_rank(operation, path[0])
+        power = self.get_power(operation, rank, value, create=False)
+        v["power_before"] = power.value
+        v["power"] = power
+        power.value -= 1
+        self.announce_op_remove(operation)
+
+    def announce_op_remove(self, operation: Operation):
+        pass
+
+    def op_delete(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # in this case, the path should be just [context], and value is the power name.
+        rank = self.get_stat_rank(operation, path[0])
+        power = self.get_power(operation, rank, value, create=False)
+        v["power_before"] = power.value
+        v["power"] = power
+        power.value = 0
+        self.announce_op_delete(operation)
+
+    def announce_op_delete(self, operation: Operation):
+        pass
+
+    def get_power_tag(self, operation: Operation, rank, tag: str):
+        tag = validate_name(tag, thing_type=f"Tag", ex_type=operation.ex)
+        return tag.lower()
+
+    def op_tag(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # in this case, the path should be just [context, power_name], and value is the power name.
+        rank = self.get_stat_rank(operation, path[0])
+        if not len(path) >= 2:
+            raise operation.ex(f"No power name given.")
+        power = self.get_power(operation, rank, path[1], create=False)
+        tag = self.get_power_tag(operation, rank, value)
+        v["power_before"] = power.value
+        v["power"] = power
+        tags = power.data.get("tags", list())
+        if tag not in tags:
+            v["tag_added"] = tag
+            tags.append(tag)
+        power.data["tags"] = tags
+        self.announce_op_tag(operation)
+
+    def announce_op_tag(self, operation: Operation):
+        pass
+
+    def op_untag(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        # in this case, the path should be just [context, power_name], and value is the power name.
+        rank = self.get_stat_rank(operation, path[0])
+        if not len(path) >= 2:
+            raise operation.ex(f"No power name given.")
+        power = self.get_power(operation, rank, path[1], create=False)
+        tag = self.get_power_tag(operation, rank, value)
+        v["power_before"] = power.value
+        v["power"] = power
+        tags = power.data.get("tags", list())
+        if tag in tags:
+            v["tag_removed"] = tag
+            tags.remove(tag)
+        power.data["tags"] = tags
+        self.announce_op_untag(operation)
+
+    def announce_op_untag(self, operation: Operation):
+        pass
 
 
 class StatPowerHandler(BaseHandler):
+    """
+    Stat Powers are usually branched off of Stats. For instance, in Exalted, you can purchase Charms
+    based off of Martial Arts Styles. In that case, the StyleHandler would be a StatHandler that handles
+    purchasing dots in each Style, and the MartialArtsCharmHandler would be a CustomPowerHandler that handles
+    purchasing Charms for each Style.
+    """
+
     stat_category: str = None
     singular_name: str = None
     options = ("add", "remove")
+    load_order = 1000
 
     def add(self, stat_name: str, power_name: str, value: int = 1) -> str:
         return self.do_base(stat_name, power_name, value, self.do_add)

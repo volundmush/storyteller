@@ -4,7 +4,7 @@ GAMES = {}
 def init(settings, plugins):
     settings.AT_SERVER_STARTSTOP_MODULE.append("storyteller.startup_hooks")
 
-    settings.STORYTELLER_MODULES = dict()
+    settings.STORYTELLER_GAMES = dict()
 
     settings.INSTALLED_APPS.append("storyteller")
 
@@ -13,4 +13,4 @@ def init(settings, plugins):
 
     settings.CMD_MODULES_CHARACTER.append("storyteller.commands")
 
-    settings.STORYTELLER_DEFAULT_MODULE = None
+    settings.STORYTELLER_DEFAULT_GAME = None

@@ -80,6 +80,19 @@ class HasValueData(HasValue, HasData):
         abstract = True
 
 
+class HasEverything(HasValueData):
+    """
+    Convenience wrapper for the above abstract models.
+    """
+
+    modules = models.JSONField(blank=False, null=True, default=dict)
+    tags = models.JSONField(blank=False, null=True, default=list)
+    tier = models.SmallIntegerField(default=0)
+
+    class Meta:
+        abstract = True
+
+
 class Stat(HasData):
     """
     This model normalizes storage of Stat names.
@@ -101,7 +114,7 @@ class Stat(HasData):
         unique_together = (("category", "name"),)
 
 
-class StatRank(HasValueData):
+class StatRank(HasEverything):
     """
     Relational table which stores a character's Stat ranks.
 
@@ -117,11 +130,11 @@ class StatRank(HasValueData):
     sheet = models.ForeignKey(SheetInfo, on_delete=models.CASCADE, related_name="stats")
     stat = models.ForeignKey(Stat, on_delete=models.CASCADE, related_name="ranks")
     context = models.CharField(max_length=100, blank=True, null=False, default="")
-    # As it implements HasValueData, we also have a value and data field here.
+    description = models.TextField(blank=True, null=False, default="")
 
     def __str__(self):
         if self.context:
-            return f"{self.context}"
+            return f"{self.stat}: {self.context}"
         return str(self.stat)
 
     def __repr__(self):
@@ -159,7 +172,7 @@ class Power(HasData):
         unique_together = (("family", "category", "subcategory", "name"),)
 
 
-class PowerRank(HasValueData):
+class PowerRank(HasEverything):
     """
     Relates a Power with a Character sheet. This is where power "purchases" are stored.
     """
@@ -168,7 +181,6 @@ class PowerRank(HasValueData):
         SheetInfo, on_delete=models.CASCADE, related_name="powers"
     )
     power = models.ForeignKey(Power, on_delete=models.CASCADE, related_name="ranks")
-    # As it implements HasValueData, we also have a value and data field here.
 
     def __str__(self):
         return str(self.power)
@@ -197,7 +209,7 @@ class StatPower(models.Model):
         unique_together = (("stat", "name"),)
 
 
-class StatPowerRank(HasValueData):
+class StatPowerRank(HasEverything):
     """
     Handles 'purchases' of StatPowers on a character sheet.
     """
@@ -214,7 +226,7 @@ class StatPowerRank(HasValueData):
         unique_together = (("sheet", "power"),)
 
 
-class CustomPower(HasValueData):
+class CustomPower(HasEverything):
     """
     A CustomPower is linked to a stat AND a context.
 

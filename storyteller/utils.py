@@ -22,9 +22,18 @@ def dramatic_capitalize(capitalize_string=""):
     return capitalize_string
 
 
-def get_story(character):
+def get_story(character, load=True):
     if not character.ndb.story:
         from .handlers import GameHandler
 
         character.ndb.story = GameHandler(character)
-    return character.ndb.story
+
+    handler = character.ndb.story
+
+    if load:
+        try:
+            handler.load()
+        except ValueError as err:
+            character.msg(err)
+
+    return handler

@@ -28,7 +28,7 @@ def at_server_start():
     import storyteller
 
     try:
-        for k, v in settings.STORYTELLER_MODULES.items():
+        for k, v in settings.STORYTELLER_GAMES.items():
             path = None
             name = None
             key = None
