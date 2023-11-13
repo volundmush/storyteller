@@ -60,7 +60,8 @@ class CmdSheet(AthanorCommand):
         lines.append(self.styled_header(f"Sheet Help for {target}"))
         story.game.render_help(lines)
         for handler in story.handlers:
-            handler.render_help(lines)
+            if handler.api_access:
+                handler.render_help(lines)
         story.game.render_help_end(lines)
         lines.append(self.styled_footer())
         self.msg_lines(lines)

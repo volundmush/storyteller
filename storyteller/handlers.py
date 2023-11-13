@@ -46,13 +46,16 @@ class RawHandler:
     api_access = True
     sheet_render = True
     system_name = "SHEET"
-    name: str = "Handler"
     options: set[str] = set()
     min_path_length = 1
     path_format = ""
     load_order = 0
     context_delim = ":"
     context_delim_display = ": "
+
+    @property
+    def name(self):
+        return self.__class__.__name__
 
     def __init__(self, owner, game, base):
         self.owner = owner
@@ -358,9 +361,6 @@ class RawHandler:
         | +Presence............** +Survival...........***                            |
 
         """
-        fits = [item for item in items if len(item) <= element_width]
-        no_fit = [item for item in items if item not in fits]
-
         available_width = width - 2 - left_pad
         elements_per_line = 1
         for possible_elements in range(1, 11):
@@ -372,6 +372,7 @@ class RawHandler:
 
         # Let's gather fits into a list of lists, where each list is a line.
         # It's fine if the last line has fewer than elements_per_line elements.
+        fits = items.copy()
         lines_of_fits = list()
         while fits:
             lines_of_fits.append(fits[:elements_per_line])
@@ -397,19 +398,11 @@ class RawHandler:
             )
             lines.append(out_line)
 
-        for item in no_fit:
-            filler = ANSIString(" " * (element_width - len(item)))
-            out_line = (
-                ANSIString(f"|{border}{symbol_border}|n")
-                + item
-                + filler
-                + ANSIString(f"|n|{border}{symbol_border}|n")
-            )
-            lines.append(out_line)
-
     def render_sheet_stat(
-        self, viewer, width, stat, tiers=False, context_delim=": ", item_width=23
+        self, viewer, width, stat, tiers=False, context_delim=": ", item_width=None
     ) -> ANSIString:
+        if item_width is None:
+            item_width = self.item_width
         available_width = item_width
 
         tier_color = self.get_color(f"tier_{stat.tier}")
@@ -431,9 +424,7 @@ class RawHandler:
         )
 
         tier_name = (
-            ANSIString("").join([tier_symbol, stat_name])
-            if tiers
-            else ANSIString(stat.stat.name)
+            ANSIString("").join([tier_symbol, stat_name]) if tiers else stat_name
         )
 
         available_width -= len(tier_name)
@@ -463,9 +454,7 @@ class RawHandler:
         return tier_name + dots + stars
 
     def render_sheet_power(self, viewer, width, rank, tiers=False, item_width=35):
-        display_name = (
-            rank.power.name if rank.value <= 1 else f"{rank.power.name} ({rank.value})"
-        )
+        display_name = str(rank) if rank.value <= 1 else f"{rank} ({rank.value})"
         return display_name.ljust(item_width)
 
     def render_sheet_stats(
@@ -475,36 +464,97 @@ class RawHandler:
         lines,
         stats,
         name=None,
-        context_delim=": ",
-        item_width=23,
+        item_width=None,
     ):
+        if item_width is None:
+            item_width = self.item_width
         self.render_sheet_header(viewer, width, lines, name or self.name)
 
         items = list()
 
         tiers = "tier" in self.options
 
-        for stat in stats:
-            items.append(
-                self.render_sheet_stat(
+        fits = [item for item in stats if len(str(item)) <= item_width / 1.5]
+        no_fits = [item for item in stats if item not in fits]
+
+        if fits:
+            for stat in fits:
+                items.append(
+                    self.render_sheet_stat(
+                        viewer,
+                        width,
+                        stat,
+                        tiers=tiers,
+                        context_delim=self.context_delim_display,
+                        item_width=item_width,
+                    )
+                )
+
+            self.render_sheet_tabular(
+                viewer,
+                width,
+                lines,
+                items,
+                between_pad=1,
+                left_pad=1,
+                element_width=item_width,
+            )
+        items.clear()
+
+        if no_fits:
+            for stat in no_fits:
+                items.append(
+                    self.render_sheet_stat(
+                        viewer,
+                        width,
+                        stat,
+                        tiers=tiers,
+                        context_delim=self.context_delim_display,
+                        item_width=width - 4,
+                    )
+                )
+                self.render_sheet_tabular(
                     viewer,
                     width,
-                    stat,
-                    tiers=tiers,
-                    context_delim=self.context_delim_display,
-                    item_width=item_width,
+                    lines,
+                    items,
+                    between_pad=1,
+                    left_pad=1,
+                    element_width=width - 4,
                 )
-            )
 
-        self.render_sheet_tabular(
-            viewer,
-            width,
-            lines,
-            items,
-            between_pad=1,
-            left_pad=1,
-            element_width=item_width,
-        )
+    def _render_category_name(self, name):
+        return f"{name}"
+
+    def _render_subcategory_name(self, name):
+        return name
+
+    def render_sheet_categories(
+        self, viewer, width: int, lines: list[ANSIString], data
+    ):
+        tiers = "tier" in self.options
+        for category, subcategories in data.items():
+            header_name = self._render_category_name(category)
+            self.render_sheet_header(viewer, width, lines, header_name)
+            for subcat, ranks in subcategories.items():
+                subheader_name = self._render_subcategory_name(subcat)
+                self.render_sheet_subheader(viewer, width, lines, subheader_name)
+                powers = list()
+                for rank in ranks:
+                    powers.append(
+                        self.render_sheet_power(
+                            viewer, width, rank, tiers=tiers, item_width=35
+                        )
+                    )
+                self.render_sheet_tabular(
+                    viewer,
+                    width,
+                    lines,
+                    powers,
+                    left_pad=1,
+                    between_pad=1,
+                    element_width=35,
+                )
 
 
 class GameHandler(RawHandler):
@@ -1057,6 +1107,7 @@ class StatHandler(BaseHandler):
     use_context = False
     # If enforce_context is True, then the context field is required.
     enforce_context = False
+    item_width = 23
 
     singular_name = None
 
@@ -1101,7 +1152,11 @@ class StatHandler(BaseHandler):
         self.clear()
 
     def all(self):
-        return self._get_reverse().filter(stat__category__iexact=self.stat_category)
+        return (
+            self._get_reverse()
+            .filter(stat__category__iexact=self.stat_category)
+            .order_by("stat__name", "context")
+        )
 
     def get(self, name: str, context: str = "") -> StatRank:
         return (
@@ -1152,11 +1207,13 @@ class StatHandler(BaseHandler):
         if not name:
             raise operation.ex(f"No name given.")
 
-        if ":" in name and not (self.use_context or self.enforce_context):
+        if self.context_delim in name and not (
+            self.use_context or self.enforce_context
+        ):
             raise operation.ex(f"{self.plural_name} cannot have a context.")
 
-        if ":" in name:
-            category, context = [n.strip() for n in name.split(":", 1)]
+        if self.context_delim in name:
+            category, context = [n.strip() for n in name.split(self.context_delim, 1)]
         else:
             if self.enforce_context:
                 raise operation.ex(f"{self.plural_name} must have a context.")
@@ -1351,9 +1408,7 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        srank = self.check_srank(operation, stat_name, context, partial=True)
         self._op_tier(operation, srank, value)
 
     def op_tag(self, operation: Operation):
@@ -1362,9 +1417,7 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        srank = self.check_srank(operation, stat_name, context, partial=True)
         self._op_tag(operation, srank, value)
 
     def op_untag(self, operation: Operation):
@@ -1384,9 +1437,7 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        srank = self.check_srank(operation, stat_name, context, partial=True)
         self._op_mod(operation, srank, value)
 
     def op_unmod(self, operation: Operation):
@@ -1561,6 +1612,7 @@ class MeritHandler(StatHandler):
     use_context = True
     dynamic_choices = True
     load_order = 30
+    item_width = 35
 
 
 class SpecialtyHandler(MeritHandler):
@@ -1581,6 +1633,7 @@ class SpecialtyHandler(MeritHandler):
     load_order = 20
     context_delim = "/"
     context_delim_display = "/"
+    dynamic_choices = False
 
     def get_choices(self) -> list[str]:
         """
@@ -2001,39 +2054,6 @@ class PowerHandler(BaseHandler):
     def sort_data(self, data):
         return data
 
-    def _render_category_name(self, name):
-        return f"{name} {self.family}"
-
-    def _render_subcategory_name(self, name):
-        return name
-
-    def render_sheet_categories(
-        self, viewer, width: int, lines: list[ANSIString], data
-    ):
-        tiers = "tier" in self.options
-        for category, subcategories in data.items():
-            header_name = self._render_category_name(category)
-            self.render_sheet_header(viewer, width, lines, header_name)
-            for subcat, ranks in subcategories.items():
-                subheader_name = self._render_subcategory_name(subcat)
-                self.render_sheet_subheader(viewer, width, lines, subheader_name)
-                powers = list()
-                for rank in ranks:
-                    powers.append(
-                        self.render_sheet_power(
-                            viewer, width, rank, tiers=tiers, item_width=35
-                        )
-                    )
-                self.render_sheet_tabular(
-                    viewer,
-                    width,
-                    lines,
-                    powers,
-                    left_pad=1,
-                    between_pad=1,
-                    element_width=35,
-                )
-
     def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
         if not (items := self.all()):
             return
@@ -2042,6 +2062,9 @@ class PowerHandler(BaseHandler):
             data[rank.power.category][rank.power.subcategory].append(rank)
         sorted_data = self.sort_data(data)
         self.render_sheet_categories(viewer, width, lines, sorted_data)
+
+    def _render_category_name(self, name):
+        return f"{name} {self.family}"
 
 
 class CustomPowerHandler(BaseHandler):
@@ -2066,6 +2089,7 @@ class CustomPowerHandler(BaseHandler):
     options = ("add", "remove", "delete", "tag", "untag")
     reverse_relation = "stats"
     rank_reverse_relation = "customs"
+    custom_model = CustomPower
     min_path_length = 1
     load_order = 100
 
@@ -2075,47 +2099,44 @@ class CustomPowerHandler(BaseHandler):
     def _get_rank_reverse(self, rank):
         return getattr(rank, self.rank_reverse_relation)
 
-    def get_context(self, operation: Operation, name: str):
-        context = validate_name(
-            name,
-            thing_type=f"Context",
-            ex_type=operation.ex,
+    def all(self):
+        return self.custom_model.objects.filter(
+            stat__sheet=self.owner.sheet,
+            stat__stat__category__iexact=self.stat_category,
+            stat__stat__name__iexact=self.stat,
         )
-        r = self._get_reverse()
+
+    def candidates(self):
+        rev = self._get_reverse()
+        return rev.filter(
+            stat__category__iexact=self.stat_category, stat__name__iexact=self.stat
+        ).exclude(context="")
+
+    def get_stat_rank(self, operation: Operation, context: str, name: str, create=True):
+        name = dramatic_capitalize(
+            validate_name(name, thing_type=f"Custom {self.stat}", ex_type=operation.ex)
+        )
+
+        if not (candidates := self.candidates()):
+            raise operation.ex(f"No {self.stat} found.")
         if not (
-            choices := r.filter(
-                stat__category__iexact=self.stat_category, stat__name__iexact=self.stat
-            ).exclude(context="")
+            stat_rank := partial_match(context, candidates, key=lambda x: x.context)
         ):
-            raise operation.ex(f"No choices found.")
-        if not (context := partial_match(context, choices, key=lambda x: x.context)):
-            raise operation.ex(
-                f"No context found matching '{context}'. Choices are: {', '.join([x.context for x in choices])}"
-            )
+            raise operation.ex(f"No {self.stat} found matching '{context}'.")
 
-        return context
+        r = self._get_rank_reverse(stat_rank)
 
-    def get_power(self, operation: Operation, rank, name: str, create=True):
-        name = validate_name(
-            name,
-            thing_type=f"Name",
-            ex_type=operation.ex,
-        )
-        name = dramatic_capitalize(name)
-
-        r = self._get_rank_reverse(rank)
-
-        if not (power := r.filter(name__iexact=name).first()):
-            if not create:
-                if not (choices := r.all()):
-                    raise operation.ex(f"No choices found.")
-                if not (power := partial_match(name, choices)):
-                    raise operation.ex(
-                        f"No power found matching '{name}'. Choices are: {', '.join([x.name for x in choices])}"
-                    )
-                return power
-            power = r.create(name=name)
-        return power
+        if create:
+            rank, created = r.get_or_create(name=name)
+        else:
+            if not (choices := r.all()):
+                raise operation.ex(f"No entry found matching '{name}'.")
+            if not (rank := partial_match(name, choices)):
+                raise operation.ex(
+                    f"No entry found matching '{name}'. Choices are: "
+                    f"{', '.join([str(x) for x in choices])}"
+                )
+        return rank
 
     def op_add(self, operation: Operation):
         v = operation.variables
@@ -2123,15 +2144,8 @@ class CustomPowerHandler(BaseHandler):
         value = v["value"]
 
         # in this case, the path should be just [context], and value is the power name.
-        rank = self.get_stat_rank(operation, path[0])
-        power = self.get_power(operation, rank, value)
-        v["power_before"] = power.value
-        v["power"] = power
-        power.value += 1
-        self.announce_op_add(operation)
-
-    def announce_op_add(self, operation: Operation):
-        pass
+        rank = self.get_stat_rank(operation, path[0], value)
+        self._op_value(operation, rank, rank.value + 1)
 
     def op_remove(self, operation: Operation):
         v = operation.variables
@@ -2139,15 +2153,8 @@ class CustomPowerHandler(BaseHandler):
         value = v["value"]
 
         # in this case, the path should be just [context], and value is the power name.
-        rank = self.get_stat_rank(operation, path[0])
-        power = self.get_power(operation, rank, value, create=False)
-        v["power_before"] = power.value
-        v["power"] = power
-        power.value -= 1
-        self.announce_op_remove(operation)
-
-    def announce_op_remove(self, operation: Operation):
-        pass
+        rank = self.get_stat_rank(operation, path[0], value, create=False)
+        self._op_value(operation, rank, rank.value - 1)
 
     def op_delete(self, operation: Operation):
         v = operation.variables
@@ -2155,15 +2162,8 @@ class CustomPowerHandler(BaseHandler):
         value = v["value"]
 
         # in this case, the path should be just [context], and value is the power name.
-        rank = self.get_stat_rank(operation, path[0])
-        power = self.get_power(operation, rank, value, create=False)
-        v["power_before"] = power.value
-        v["power"] = power
-        power.value = 0
-        self.announce_op_delete(operation)
-
-    def announce_op_delete(self, operation: Operation):
-        pass
+        rank = self.get_stat_rank(operation, path[0], value, create=False)
+        self._op_delete(operation, rank)
 
     def get_power_tag(self, operation: Operation, rank, tag: str):
         tag = validate_name(tag, thing_type=f"Tag", ex_type=operation.ex)
@@ -2175,22 +2175,10 @@ class CustomPowerHandler(BaseHandler):
         value = v["value"]
 
         # in this case, the path should be just [context, power_name], and value is the power name.
-        rank = self.get_stat_rank(operation, path[0])
-        if not len(path) >= 2:
+        if not len(path) > 1:
             raise operation.ex(f"No power name given.")
-        power = self.get_power(operation, rank, path[1], create=False)
-        tag = self.get_power_tag(operation, rank, value)
-        v["power_before"] = power.value
-        v["power"] = power
-        tags = power.data.get("tags", list())
-        if tag not in tags:
-            v["tag_added"] = tag
-            tags.append(tag)
-        power.data["tags"] = tags
-        self.announce_op_tag(operation)
-
-    def announce_op_tag(self, operation: Operation):
-        pass
+        rank = self.get_stat_rank(operation, path[0], path[1], create=False)
+        self._op_tag(operation, rank, value)
 
     def op_untag(self, operation: Operation):
         v = operation.variables
@@ -2198,22 +2186,20 @@ class CustomPowerHandler(BaseHandler):
         value = v["value"]
 
         # in this case, the path should be just [context, power_name], and value is the power name.
-        rank = self.get_stat_rank(operation, path[0])
-        if not len(path) >= 2:
+        if not len(path) > 1:
             raise operation.ex(f"No power name given.")
-        power = self.get_power(operation, rank, path[1], create=False)
-        tag = self.get_power_tag(operation, rank, value)
-        v["power_before"] = power.value
-        v["power"] = power
-        tags = power.data.get("tags", list())
-        if tag in tags:
-            v["tag_removed"] = tag
-            tags.remove(tag)
-        power.data["tags"] = tags
-        self.announce_op_untag(operation)
+        rank = self.get_stat_rank(operation, path[0], path[1], create=False)
+        self._op_untag(operation, rank, value)
 
-    def announce_op_untag(self, operation: Operation):
-        pass
+    def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        if not (items := self.all()):
+            return
+        data = defaultdict(list)
+        for item in items:
+            data[item.stat.context].append(item)
+        full_data = dict()
+        full_data["Evocations"] = data
+        self.render_sheet_categories(viewer, width, lines, full_data)
 
 
 class StatPowerHandler(BaseHandler):
@@ -2273,7 +2259,11 @@ class FooterHandler(RawHandler):
     sheet_render = True
     load_order = 999999999999
 
+    def render_sheet_final(self, viewer, width, lines):
+        pass
+
     def render_sheet(self, viewer, width: int, lines: list[ANSIString]):
+        self.render_sheet_final(viewer, width, lines)
         self.render_sheet_bottom(viewer, width, lines)
 
     def render_sheet_bottom(self, viewer, width, lines):
@@ -2313,3 +2303,22 @@ class FooterHandler(RawHandler):
         )
         right = ANSIString((symbol_filler * right_len) + symbol_corner + "|n")
         lines.append(left + right)
+
+
+class PoolHandler(RawHandler):
+    name = "Pools"
+    reverse_relation = "pools"
+    sheet_render = False
+    api_access = False
+
+    def _get_reverse(self):
+        return getattr(self.owner.sheet, self.reverse_relation)
+
+    def all(self, pool_type=None):
+        out = list()
+        for pool in self.game.pools:
+            if pool.target_has_pool(self.owner):
+                if pool_type and (pool_type != pool.pool_type):
+                    continue
+                out.append(pool)
+        return out

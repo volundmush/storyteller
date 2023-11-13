@@ -2,6 +2,7 @@ from evennia.utils.utils import callables_from_module
 from athanor.utils import partial_match, Operation
 import storyteller
 from storyteller.models import SheetInfo
+from storyteller.utils import get_story
 
 
 class Template:
@@ -23,6 +24,7 @@ class Template:
     advantages = list()
     advantages_defaults = dict()
     sheet_footer = "Storyteller"
+    pools: list[str] = list()
 
     def __init__(self, game):
         self.game = game
@@ -95,6 +97,33 @@ class Template:
             out.append((field, self.field(target, field)))
         return out
 
+    def has_pool(self, target, pool: str):
+        return pool in self.pools
+
+    def get_advantage(self, target, stat):
+        story = get_story(target)
+        adv = story.handlers_dict["Advantages"]
+        if stat := adv.get(stat):
+            return stat.value
+        return 0
+
+    def get_attribute(self, target, stat):
+        story = get_story(target)
+        adv = story.handlers_dict["Attributes"]
+        if stat := adv.get(stat):
+            return stat.value
+        return 0
+
+    def get_ability(self, target, stat):
+        story = get_story(target)
+        adv = story.handlers_dict["Abilities"]
+        if stat := adv.get(stat):
+            return stat.value
+        return 0
+
+    def calculate_pool_max_willpower(self, target: "DefaultCharacter"):
+        return self.get_advantage(target, "Willpower")
+
 
 class Game:
     """
@@ -108,6 +137,8 @@ class Game:
         self.key = key or alias
         self.templates = dict()
         self.handlers = list()
+        self.pools = list()
+        self.pools_dict = dict()
         self.default_template = "Mortal"
 
     def __str__(self):
@@ -121,6 +152,15 @@ class Game:
     def setup_handlers(self, path: str):
         self.handlers.extend(callables_from_module(path).values())
 
+    def setup_pools(self, path: str):
+        pools = list()
+        for k, v in callables_from_module(path).items():
+            pools.append(v(self))
+        self.pools.extend(pools)
+        self.pools.sort(key=lambda x: x.sort_order)
+        for pool in pools:
+            self.pools_dict[str(pool)] = pool
+
     def get_handlers(self, character):
         return self.handlers
 
@@ -129,3 +169,70 @@ class Game:
 
     def render_help_end(self, lines: list[str]):
         pass
+
+
+class Pool:
+    """
+    Abstract base class for dealing with 'pools' of points, like motes of Essence, temporary Willpower,
+    Rage, Vitae, etc.
+    """
+
+    # if True, this pool supports long-term commitments of points to some effect.
+    # This is mostly used by Exalted.
+    can_commit = False
+    # pool type is used for display purposes.
+    pool_type = "Pool"
+    # Type name is used for displays. For instance, the Pool might be Personal, for Personal Essence.
+    type_name_singular = ""
+    type_name_plural = ""
+    # The name of individual units, like 'mote' for Exalted's Essence.
+    unit_name_singular = "Point"
+    unit_name_plural = "Points"
+    # If ignore_reset is true, this pool cannot be reset at all.
+    ignore_reset = False
+    # By default, on a pool reset, pools attempt to max out their values. If this is False, they will
+    # instead try to empty themselves.
+    empty_on_reset = False
+    # Used for display ordering.
+    sort_order = 0
+
+    def __init__(self, game):
+        self.game = game
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    def calculate_max(self, target) -> int:
+        """
+        Calculate the maximum for a pool.
+        """
+        story = get_story(target)
+        t = story.template()
+        if func := getattr(
+            t, f"calculate_pool_max_{str(self).lower().replace(' ', '_')}", None
+        ):
+            return func(target)
+        return 0
+
+    def target_has_pool(self, target) -> bool:
+        story = get_story(target)
+        t = story.template()
+        return t.has_pool(target, str(self))
+
+    def total_committed(self, target) -> int:
+        story = get_story(target)
+        pool, created = target.sheet.pools.get_or_create(name=str(self))
+        if commits := pool.commits.all():
+            return sum([p.value for p in commits])
+        return 0
+
+    def total_spent(self, target) -> int:
+        story = get_story(target)
+        pool, created = target.sheet.pools.get_or_create(name=str(self))
+        return pool.spent
+
+    def maximum_possible(self, target) -> int:
+        return self.calculate_max(target) - self.total_committed(target)
+
+    def total_available(self, target) -> int:
+        return self.maximum_possible(target) - self.total_spent(target)

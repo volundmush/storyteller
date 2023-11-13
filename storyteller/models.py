@@ -247,3 +247,24 @@ class CustomPower(HasEverything):
 
     class Meta:
         unique_together = (("stat", "name"),)
+
+
+class Pool(models.Model):
+    sheet = models.ForeignKey(SheetInfo, on_delete=models.CASCADE, related_name="pools")
+    name = models.CharField(max_length=30, blank=False, null=False)
+    spent = models.IntegerField(blank=False, null=False, default=0)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        unique_together = (("sheet", "name"),)
+
+
+class PoolCommit(models.Model):
+    pool = models.ForeignKey(Pool, on_delete=models.CASCADE, related_name="commits")
+    value = models.IntegerField(blank=False, null=False, default=0)
+    description = models.TextField(blank=True, null=False, default="")
+
+    def __str__(self):
+        return f"{self.pool}: {self.value}"
