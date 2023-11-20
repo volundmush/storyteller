@@ -1,3 +1,4 @@
+import typing
 from evennia.utils.utils import callables_from_module
 from athanor.utils import partial_match, Operation
 import storyteller
@@ -124,6 +125,9 @@ class Template:
     def calculate_pool_max_willpower(self, target: "DefaultCharacter"):
         return self.get_advantage(target, "Willpower")
 
+    def format_help(self, looker, section: str) -> typing.Optional[str]:
+        pass
+
 
 class Game:
     """
@@ -207,17 +211,22 @@ class Pool:
         Calculate the maximum for a pool.
         """
         story = get_story(target)
+        pool, created = target.sheet.pools.get_or_create(name=str(self))
         t = story.template()
+        out = [pool.bonus]
         if func := getattr(
             t, f"calculate_pool_max_{str(self).lower().replace(' ', '_')}", None
         ):
-            return func(target)
-        return 0
+            out.append(func(target))
+        return sum(out)
 
     def target_has_pool(self, target) -> bool:
         story = get_story(target)
         t = story.template()
-        return t.has_pool(target, str(self))
+        return (
+            t.has_pool(target, str(self))
+            or target.sheet.pools.filter(name=str(self), bonus__gt=0).exists()
+        )
 
     def total_committed(self, target) -> int:
         story = get_story(target)

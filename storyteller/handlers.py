@@ -30,6 +30,7 @@ from .models import (
     PowerRank,
     StatPowerRank,
     CustomPower,
+    CreateEntry,
 )
 
 
@@ -45,13 +46,16 @@ class RawHandler:
 
     api_access = True
     sheet_render = True
+    menu_access = True
     system_name = "SHEET"
     options: set[str] = set()
     min_path_length = 1
+    min_path_length_operation = dict()
     path_format = ""
     load_order = 0
     context_delim = ":"
     context_delim_display = ": "
+    options_display: dict[str, str] = dict()
 
     @property
     def name(self):
@@ -87,7 +91,12 @@ class RawHandler:
     def at_pre_operation(self, operation: Operation):
         self.permission_check(operation)
 
-        if self.min_path_length > 0:
+        if (
+            self.min_path_length_operation.get(
+                operation.operation, self.min_path_length
+            )
+            > 0
+        ):
             if (path := operation.kwargs.get("path", None)) is None:
                 operation.status = operation.st.HTTP_400_BAD_REQUEST
                 raise operation.ex(f"No path given.")
@@ -556,6 +565,25 @@ class RawHandler:
                     element_width=35,
                 )
 
+    def shortcut_dict(self, data: dict):
+        pass
+
+    def generate_menu_commands(self, commands: dict):
+        pass
+
+    def format_menu_help(self, looker) -> str:
+        out = list()
+        out.append(self._render_menu_help(looker))
+        t = self.template()
+
+        if temp_help := t.format_help(looker, str(self)):
+            out.append(temp_help)
+
+        return "\n".join(out)
+
+    def _render_menu_help(self, looker) -> str:
+        return self.__class__.__doc__ or ""
+
 
 class GameHandler(RawHandler):
     """
@@ -582,6 +610,14 @@ class GameHandler(RawHandler):
         lines.append(
             f"  |rWARNING|n: Changing a character's game will wipe their sheet!"
         )
+
+    def get_sheet(self, viewer, width: int = 78):
+        lines = list()
+        for handler in self.handlers:
+            if not handler.sheet_render:
+                continue
+            handler.render_sheet(viewer, width, lines)
+        return lines
 
     def __init__(self, owner):
         super().__init__(owner, None, self)
@@ -670,6 +706,7 @@ class GameHandler(RawHandler):
         sheet.game = game.key
         sheet.template = game.default_template
         sheet.save()
+        operation.results["redisplay_menu"] = True
         self.reload()
 
     def render_sheet_top(self, viewer, width, lines):
@@ -761,6 +798,72 @@ class GameHandler(RawHandler):
         self.render_sheet_header(viewer, width, lines)
         self.render_sheet_info(viewer, width, lines)
 
+    def shortcut_dict(self, data: dict):
+        data["Game"] = (self, "set", [])
+
+    def generate_menu_commands(self, commands: dict):
+        commands["game"] = (self, "set", "game <game>", False, "Change Game")
+        commands["template"] = (
+            self.base.handlers_dict["Templates"],
+            "set",
+            "template <template>",
+            False,
+            "Change Template",
+        )
+        commands["field"] = (
+            self.base.handlers_dict["Fields"],
+            "set",
+            "field <field>=<value>",
+            True,
+            "Set Field",
+        )
+
+    def _render_menu_help(self, looker) -> str:
+        out = list()
+        out.append(looker.account.styled_separator("Game Select"))
+        out.append(
+            "Your GAME is the module which governs your character's sheet and storyteller rules."
+        )
+        out.append(
+            "|rWARNING:|n You can change games, but it will |wWIPE THE EXISTING SHEET!|n"
+        )
+        out.append(f"Current Game: |w{self.game}|n")
+        out.append(
+            f"|wAvailable Games|n: {', '.join([str(x) for x in self.get_choices()])}"
+        )
+
+        tem_handler = self.base.handlers_dict["Templates"]
+        out.append(looker.account.styled_separator("Template Select"))
+        out.append("Your TEMPLATE is the type of character you'll be playing.")
+        out.append(
+            "|rWARNING:|n Changing your template |wmay wipe chunks of your sheet!|n"
+        )
+        tem = self.template()
+        out.append(f"Current Template: |w{tem}|n")
+        out.append(
+            f"|wAvailable Templates:|n {', '.join([str(x) for x in tem_handler.get_choices()])}"
+        )
+
+        fields = tem.get_fields(self.owner)
+        if fields:
+            out.append(looker.account.styled_separator("Field Select"))
+            out.append(
+                "FIELDS govern extra information about your character, like sub-types or affiliations."
+            )
+            out.append("Available fields depend on your Template.")
+            out.append("")
+            for field in fields:
+                if choices := tem.get_field_choices(self.owner, field):
+                    out.append(
+                        f"|w{field} Choices|n: {', '.join([str(x) for x in choices])}"
+                    )
+                else:
+                    out.append(f"|w{field} Choices|n: <anything>")
+                if current := tem.field(self.owner, field):
+                    out.append(f"  (Currently: |w{current}|n)")
+
+        return "\n".join(out)
+
 
 class BaseHandler(RawHandler):
     """
@@ -845,6 +948,10 @@ class BaseHandler(RawHandler):
             tier = int(tier)
         except ValueError:
             raise operation.ex(f"Tier must be an integer.")
+        if tier < 0:
+            raise operation.ex(f"Tier must be greater than 0.")
+        if tier > self.max_tier:
+            raise operation.ex(f"Tier cannot be greater than {self.max_tier}.")
         v["rank"] = rank
         v["tier_before"] = rank.tier
         rank.tier = tier
@@ -934,6 +1041,7 @@ class _TemplateHandler(RawHandler):
     options = ("set",)
     min_path_length = 0
     sheet_render = False
+    menu_access = False
 
     def get_choices(self):
         return list(self.game.templates.values())
@@ -987,6 +1095,7 @@ class TemplateHandler(_TemplateHandler):
         v["template"] = template.change(self.owner)
         for handler in self.base.handlers:
             handler.at_template_change()
+        operation.results["redisplay_menu"] = True
         self.announce_op_set(operation)
 
     def announce_op_set(self, operation):
@@ -995,6 +1104,9 @@ class TemplateHandler(_TemplateHandler):
         t = v["template"]
         message = f"|cTemplate|n was changed from |w{t_b}|n to: |w{t}|n."
         self.send_message(operation, message)
+
+    def shortcut_dict(self, data: dict):
+        data["Template"] = (self, "set", [])
 
 
 class FieldHandler(_TemplateHandler):
@@ -1012,6 +1124,7 @@ class FieldHandler(_TemplateHandler):
     name = "Fields"
     path_format = "<field>"
     load_order = -500
+    min_path_length = 1
 
     def render_help_extra(self, lines: list[str]):
         t = self.template()
@@ -1051,13 +1164,13 @@ class FieldHandler(_TemplateHandler):
             operation.status = operation.st.HTTP_400_BAD_REQUEST
             raise operation.ex(f"No field value given.")
         t = self.get()
-        choices = t.get_field_choices(self.owner, field)
-        if choices:
-            if not (choice := partial_match(choice, choices)):
+        if (choices := t.get_field_choices(self.owner, field)) is not None:
+            if not (found := partial_match(choice, choices)):
                 operation.status = operation.st.HTTP_400_BAD_REQUEST
                 raise operation.ex(
                     f"No field value found matching '{choice}'. Choices are: {', '.join(choices)}"
                 )
+            choice = found
         return choice
 
     def op_set(self, operation: Operation):
@@ -1082,6 +1195,10 @@ class FieldHandler(_TemplateHandler):
         value_before = v["value_before"]
         message = f"|c{field}|n was set to: |w{value}|n. (Was |w{value_before}|n)"
         self.send_message(operation, message)
+
+    def shortcut_dict(self, data: dict):
+        for k in self.get_choices():
+            data[k] = (self, "set", [k])
 
 
 class StatHandler(BaseHandler):
@@ -1108,6 +1225,7 @@ class StatHandler(BaseHandler):
     # If enforce_context is True, then the context field is required.
     enforce_context = False
     item_width = 23
+    min_path_length_operation = {"create": 0}
 
     singular_name = None
 
@@ -1164,15 +1282,11 @@ class StatHandler(BaseHandler):
         )
 
     def get_choices(self) -> list[str]:
-        return getattr(self, "choices", list())
+        return self.stat_model.objects.filter(category=self.stat_category).values_list(
+            "name", flat=True
+        )
 
     def get_choice(self, operation, entry: str) -> str:
-        if self.dynamic_choices:
-            return dramatic_capitalize(
-                validate_name(
-                    entry, thing_type=self.singular_name, ex_type=operation.ex
-                )
-            )
         if not (choices := self.get_choices()):
             raise operation.ex(f"No {self.singular_name} choices found.")
         if not entry:
@@ -1235,7 +1349,7 @@ class StatHandler(BaseHandler):
             )
         try:
             rating = int(value) if not isinstance(value, int) else value
-        except operation.ex:
+        except ValueError:
             raise operation.ex(f"Value '{value}' is not an integer.")
 
         if rating < self.min_value:
@@ -1247,6 +1361,31 @@ class StatHandler(BaseHandler):
                 f"Value '{rating}' is greater than the maximum value of {self.max_value}."
             )
         return rating
+
+    def op_create(self, operation: Operation):
+        v = operation.variables
+        value = v["value"]
+
+        value = dramatic_capitalize(
+            validate_name(value, thing_type=self.singular_name, ex_type=operation.ex)
+        )
+
+        choices = self.get_choices()
+
+        if partial_match(value, choices, exact=True):
+            raise operation.ex(f"{self.singular_name} '{value}' already exists.")
+
+        stat = self.stat_model.objects.create(category=self.stat_category, name=value)
+        v["stat"] = stat
+        entry = CreateEntry.objects.create(entry=stat, user=operation.user)
+
+        self.announce_op_create(operation)
+
+    def announce_op_create(self, operation):
+        v = operation.variables
+        stat = v["stat"]
+        message = f"{self.singular_name} '{stat}' was created."
+        self.send_message(operation, message)
 
     def op_set(self, operation: Operation):
         v = operation.variables
@@ -1330,9 +1469,6 @@ class StatHandler(BaseHandler):
         message = f"{self.format_rank(rank)} was described: |w{rank.description}|n. (Was |w{before}|n)"
         self.send_message(operation, message)
 
-    def get_choices(self) -> list[str]:
-        return list()
-
     def _get_stat(self, name: str):
         stat, created = self.stat_model.objects.get_or_create(
             category=self.stat_category, name=name
@@ -1346,7 +1482,7 @@ class StatHandler(BaseHandler):
     def check_srank(
         self,
         operation,
-        stat: str,
+        stat,
         context: str,
         partial: bool = False,
         create: bool = True,
@@ -1355,13 +1491,16 @@ class StatHandler(BaseHandler):
         if create:
             partial = False
 
+        candidates = r.filter(stat=stat)
+
         if partial:
-            candidates = r.filter(stat__category=self.stat_category)
             if context:
                 candidates = candidates.exclude(context="")
                 if not candidates:
                     raise operation.ex(f"No entry found matching '{context}'.")
-                if not (srank := partial_match(context, candidates)):
+                if not (
+                    srank := partial_match(context, candidates, key=lambda x: x.context)
+                ):
                     raise operation.ex(
                         f"No entry found matching '{context}'. Choices are: {', '.join(candidates)}"
                     )
@@ -1374,16 +1513,8 @@ class StatHandler(BaseHandler):
                     raise operation.ex(f"No entry found matching '{stat}'.")
                 return srank
 
-        stat_dict = {"category": self.stat_category, "name": stat}
-
-        if not (
-            srank := r.filter(
-                context__iexact=context,
-                **{f"stat__{k}__iexact": v for k, v in stat_dict.items()},
-            ).first()
-        ):
+        if not (srank := r.filter(context__iexact=context, stat=stat).first()):
             if create:
-                stat = self.check_stat(operation, stat)
                 srank, created = r.get_or_create(stat=stat, context=context)
             else:
                 raise operation.ex(
@@ -1408,7 +1539,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(operation, stat_name, context, partial=True)
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True)
         self._op_tier(operation, srank, value)
 
     def op_tag(self, operation: Operation):
@@ -1417,7 +1549,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(operation, stat_name, context, partial=True)
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True)
         self._op_tag(operation, srank, value)
 
     def op_untag(self, operation: Operation):
@@ -1426,9 +1559,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True, create=False)
         self._op_untag(operation, srank, value)
 
     def op_mod(self, operation: Operation):
@@ -1437,7 +1569,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(operation, stat_name, context, partial=True)
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True)
         self._op_mod(operation, srank, value)
 
     def op_unmod(self, operation: Operation):
@@ -1446,9 +1579,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True, create=False)
         self._op_unmod(operation, srank, value)
 
     def render_sheet_tri_categories(
@@ -1495,6 +1627,43 @@ class StatHandler(BaseHandler):
 
             self.render_sheet_tricolumns(viewer, width, lines, rendered_columns)
 
+    def shortcut_dict(self, data: dict):
+        if self.enforce_context or self.use_context:
+            return
+        if self.dynamic_choices or "create" in self.options:
+            return
+        for name in self.get_choices():
+            data[name] = (self, "set", [name])
+
+    def generate_menu_commands(self, commands: dict):
+        simple_commands = ("create", "delete")
+        for op in self.options:
+            commands[op] = (
+                self,
+                op,
+                f"{op} <{self.singular_name}>=<value>"
+                if op not in simple_commands
+                else f"{op} <{self.singular_name}>",
+                op not in simple_commands,
+                self.options_display.get(op, ""),
+            )
+
+    def _render_menu_help(self, looker) -> str:
+        out = list()
+        out.append(f"|wAvailable {self.plural_name}|n: {', '.join(self.get_choices())}")
+
+        if self.use_context or self.enforce_context:
+            if self.enforce_context:
+                out.append(f"\n|wContext|n: Required")
+            else:
+                out.append(f"\n|wContext|n: Optional")
+            out.append(
+                f"Address a contextual {self.singular_name} by adding a context after a colon."
+            )
+            out.append("For example, 'Artifact: Grand Daiklave' or 'Melee: Swords'")
+
+        return "\n".join(out)
+
 
 class AdvantageHandler(StatHandler):
     """
@@ -1510,6 +1679,9 @@ class AdvantageHandler(StatHandler):
     singular_name = "Advantage"
     options = ("set",)
     load_order = -50
+    options_display = {
+        "set": "Set Advantage to <value>.",
+    }
 
     def get_choices(self) -> list[str]:
         return getattr(self.template(), "advantages", list())
@@ -1556,6 +1728,10 @@ class AttributeHandler(StatHandler):
         "rank",
     )
     load_order = 0
+    options_display = {
+        "set": "Set Attribute to <value>.",
+        "rank": "Set Attribute to <value>.",
+    }
 
     def get_choices(self) -> list[str]:
         return getattr(self.game, "attributes", list())
@@ -1592,6 +1768,10 @@ class AbilityHandler(StatHandler):
         "rank",
     )
     load_order = 10
+    options_display = {
+        "set": "Set Ability to <value>.",
+        "rank": "Set Ability to <value>.",
+    }
 
     def get_choices(self) -> list[str]:
         return self.game.abilities
@@ -1608,7 +1788,7 @@ class MeritHandler(StatHandler):
 
     stat_category = "Merits"
     singular_name = "Merit"
-    options = ("set", "delete", "rank", "rename", "describe")
+    options = ("set", "create", "delete", "rank", "context", "describe")
     use_context = True
     dynamic_choices = True
     load_order = 30
@@ -1627,12 +1807,11 @@ class SpecialtyHandler(MeritHandler):
     stat_category = "Specialties"
     singular_name = "Specialty"
     max_value = 1
+    max_tier = 3
     remove_zero = True
-    options = ("set", "remove", "rank", "delete", "rename")
+    options = ("set", "rank", "delete", "context")
     enforce_context = True
     load_order = 20
-    context_delim = "/"
-    context_delim_display = "/"
     dynamic_choices = False
 
     def get_choices(self) -> list[str]:
@@ -1695,6 +1874,7 @@ class PowerHandler(BaseHandler):
     dynamic_category = False
     dynamic_subcategory = False
     load_order = 50
+    min_path_length_operation = {"tag": 3, "untag": 3, "tier": 3, "mod": 3, "unmod": 3}
 
     def clear(self):
         self._get_reverse().filter(power__family__iexact=self.family).delete()
@@ -1790,13 +1970,18 @@ class PowerHandler(BaseHandler):
 
     def get_name(
         self, operation: Operation, category: str, subcategory: str, name: str
-    ) -> str:
-        name = validate_name(
-            name,
-            thing_type=self.render_subcategory(category, subcategory, plural=False),
-            ex_type=operation.ex,
+    ) -> "Power":
+        candidates = self.power_model.objects.filter(
+            family__iexact=self.family,
+            category__iexact=category,
+            subcategory__iexact=subcategory,
         )
-        return dramatic_capitalize(name)
+        if not (power := partial_match(name, candidates)):
+            raise operation.ex(
+                f"No {self.render_subcategory(category, subcategory)} found matching '{name}'. Choices are: "
+                f"{', '.join([str(x) for x in candidates])}"
+            )
+        return power
 
     def get_power(
         self, operation: Operation, category: str, subcategory: str, name: str
@@ -1820,12 +2005,32 @@ class PowerHandler(BaseHandler):
     def get_power_rank(
         self,
         operation: Operation,
-        category: str,
-        subcategory: str,
-        name: str,
+        power,
         create=True,
     ) -> PowerRank:
-        rev = self._get_reverse()
+        r = self._get_reverse()
+
+        if not (rank := r.filter(power=power).first()):
+            if not create:
+                raise operation.ex(f"No {power} found.")
+            rank = r.create(power=power)
+        return rank
+
+    def op_create(self, operation: Operation):
+        v = operation.variables
+        path = v["path"]
+        value = v["value"]
+
+        category = self.get_category(operation, path[0])
+        subcategory = self.get_subcategory(operation, category, path[1])
+        name = dramatic_capitalize(
+            validate_name(
+                value,
+                thing_type=self.render_subcategory(category, subcategory, plural=False),
+                ex_type=operation.ex,
+            )
+        )
+
         power_dict = {
             "family": self.family,
             "category": category,
@@ -1833,30 +2038,22 @@ class PowerHandler(BaseHandler):
             "name": name,
         }
 
-        if not (
-            rank := rev.filter(
-                **{
-                    f"power__{k}__iexact": v
-                    for k, v in power_dict.items()
-                    if v is not None
-                },
-            ).first()
-        ):
-            if create:
-                power, created = self.power_model.objects.get_or_create(**power_dict)
-                rank = rev.create(power=power)
-            else:
-                power_dict.pop("name", None)
-                if not (choices := rev.filter(**power_dict)):
-                    raise operation.ex(
-                        f"No {self.render_subcategory(category, subcategory)} found matching '{name}'."
-                    )
-                if not (rank := partial_match(name, choices)):
-                    raise operation.ex(
-                        f"No {self.render_subcategory(category, subcategory)} found matching '{name}'. Choices are: "
-                        f"{', '.join([str(x) for x in choices])}"
-                    )
-        return rank
+        if self.power_model.objects.filter(
+            {f"{k}__iexact": v for k, v in power_dict.items()}
+        ).first():
+            raise operation.ex(f"{self.singular_name} '{value}' already exists.")
+
+        power, created = self.power_model.objects.get_or_create(**power_dict)
+        v["power"] = created
+        entry = CreateEntry.objects.create(entry=power, user=operation.user)
+
+        self.announce_op_create(operation)
+
+    def announce_op_create(self, operation):
+        v = operation.variables
+        stat = v["power"]
+        message = f"{self.singular_name} '{stat}' was created."
+        self.send_message(operation, message)
 
     def op_add(self, operation: Operation):
         v = operation.variables
@@ -1869,8 +2066,8 @@ class PowerHandler(BaseHandler):
 
         category = self.get_category(operation, path[0])
         subcategory = self.get_subcategory(operation, category, path[1])
-        name = self.get_name(operation, category, subcategory, value)
-        rank = self.get_power_rank(operation, category, subcategory, name)
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power)
         v["rank_before"] = rank.value
         rank.value += 1
         v["rank"] = rank
@@ -1894,8 +2091,8 @@ class PowerHandler(BaseHandler):
 
         category = self.get_category(operation, path[0])
         subcategory = self.get_subcategory(operation, category, path[1])
-        name = self.get_name(operation, category, subcategory, value)
-        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         v["rank_before"] = rank.value
         rank.value -= 1
         v["delete"] = self.should_delete(rank)
@@ -1916,8 +2113,8 @@ class PowerHandler(BaseHandler):
 
         category = self.get_category(operation, path[0])
         subcategory = self.get_subcategory(operation, category, path[1])
-        name = self.get_name(operation, category, subcategory, value)
-        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         self._op_delete(operation, rank)
 
     def op_tag(self, operation: Operation):
@@ -1937,8 +2134,8 @@ class PowerHandler(BaseHandler):
         subcategory = self.get_subcategory(operation, category, path[1])
         if not len(path) >= 3:
             raise operation.ex(f"No power name given.")
-        name = self.get_name(operation, category, subcategory, path[2])
-        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         self._op_tag(operation, rank, value)
 
     def op_untag(self, operation: Operation):
@@ -1958,8 +2155,8 @@ class PowerHandler(BaseHandler):
         subcategory = self.get_subcategory(operation, category, path[1])
         if not len(path) >= 3:
             raise operation.ex(f"No power name given.")
-        name = self.get_name(operation, category, subcategory, path[2])
-        rank = self.get_power_rank(operation, category, subcategory, name, create=False)
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         self._op_untag(operation, rank, value)
 
     def op_mod(self, operation: Operation):
@@ -1979,13 +2176,8 @@ class PowerHandler(BaseHandler):
         subcategory = self.get_subcategory(operation, category, path[1])
         if not len(path) >= 3:
             raise operation.ex(f"No power name given.")
-        name = self.get_name(operation, category, subcategory, path[2])
-        if not (
-            rank := self.get_power_rank(
-                operation, category, subcategory, name, create=False
-            )
-        ):
-            raise operation.ex(f"Entry not found to mod.")
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         self._op_mod(operation, rank, value)
 
     def op_unmod(self, operation: Operation):
@@ -2005,13 +2197,8 @@ class PowerHandler(BaseHandler):
         subcategory = self.get_subcategory(operation, category, path[1])
         if not len(path) >= 3:
             raise operation.ex(f"No power name given.")
-        name = self.get_name(operation, category, subcategory, path[2])
-        if not (
-            rank := self.get_power_rank(
-                operation, category, subcategory, name, create=False
-            )
-        ):
-            raise operation.ex(f"Entry not found to unmod.")
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         self._op_unmod(operation, rank, value)
 
     def op_tier(self, operation: Operation):
@@ -2034,14 +2221,8 @@ class PowerHandler(BaseHandler):
                 f"No {self.render_subcategory(category, subcategory)} name given."
             )
         name = self.get_name(operation, category, subcategory, path[2])
-        if not (
-            rank := self.get_power_rank(
-                operation, category, subcategory, name, create=False
-            )
-        ):
-            raise operation.ex(
-                f"{self.render_subcategory(category, subcategory, plural=False)} not found to tier."
-            )
+        power = self.get_name(operation, category, subcategory, value)
+        rank = self.get_power_rank(operation, power, create=False)
         self._op_tier(operation, rank, value)
 
     def all(self):
@@ -2206,7 +2387,7 @@ class StatPowerHandler(BaseHandler):
     """
     Stat Powers are usually branched off of Stats. For instance, in Exalted, you can purchase Charms
     based off of Martial Arts Styles. In that case, the StyleHandler would be a StatHandler that handles
-    purchasing dots in each Style, and the MartialArtsCharmHandler would be a CustomPowerHandler that handles
+    purchasing dots in each Style, and the MartialArtsCharmHandler would be a StatPowerHandler that handles
     purchasing Charms for each Style.
     """
 
@@ -2257,6 +2438,7 @@ class StatPowerHandler(BaseHandler):
 class FooterHandler(RawHandler):
     api_access = False
     sheet_render = True
+    menu_access = False
     load_order = 999999999999
 
     def render_sheet_final(self, viewer, width, lines):
@@ -2310,15 +2492,17 @@ class PoolHandler(RawHandler):
     reverse_relation = "pools"
     sheet_render = False
     api_access = False
+    load_order = 9999999999
 
     def _get_reverse(self):
         return getattr(self.owner.sheet, self.reverse_relation)
 
-    def all(self, pool_type=None):
+    def all(self, pool_type=None, filter_pools=True):
         out = list()
         for pool in self.game.pools:
-            if pool.target_has_pool(self.owner):
-                if pool_type and (pool_type != pool.pool_type):
-                    continue
-                out.append(pool)
+            if filter_pools and not pool.target_has_pool(self.owner):
+                continue
+            if pool_type and (pool_type != pool.pool_type):
+                continue
+            out.append(pool)
         return out

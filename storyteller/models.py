@@ -1,4 +1,6 @@
 from django.db import models
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 
 class SheetInfo(models.Model):
@@ -264,7 +266,29 @@ class Pool(models.Model):
 class PoolCommit(models.Model):
     pool = models.ForeignKey(Pool, on_delete=models.CASCADE, related_name="commits")
     value = models.IntegerField(blank=False, null=False, default=0)
+    bonus = models.IntegerField(blank=False, null=False, default=0)
     description = models.TextField(blank=True, null=False, default="")
 
     def __str__(self):
         return f"{self.pool}: {self.value}"
+
+
+class CreateEntry(models.Model):
+    """
+    This model stores the creation date of a character.
+    """
+
+    user = models.ForeignKey(
+        "accounts.AccountDB", related_name="story_created", on_delete=models.CASCADE
+    )
+    date = models.DateTimeField(auto_now_add=True)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    entry = GenericForeignKey("content_type", "object_id")
+
+    def __str__(self):
+        return str(self.date)
+
+    class Meta:
+        ordering = ["-date"]
+        unique_together = (("content_type", "object_id"),)
