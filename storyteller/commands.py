@@ -1,7 +1,6 @@
 from athanor.utils import partial_match
 from athanor.commands import AthanorCommand, AthanorAccountCommand
 from .utils import get_story
-from .editor import StorytellerMenu
 
 
 class CmdCg(AthanorCommand):
@@ -13,7 +12,7 @@ class CmdCg(AthanorCommand):
             self.msg("No such character.")
             return
 
-        story = get_story(target)
+        story = target.h.story
 
         lines = list()
         lines.append(self.styled_header(f"Sheet Info for {target}"))
@@ -30,6 +29,7 @@ class CmdCg(AthanorCommand):
             self.msg("No such character.")
             return
 
+        self.caller.attributes.clear(category="cg_menu")
         self.caller.attributes.add("cg_target", category="storyteller", value=target)
         self.msg(f"CG Target set to {target}.")
 
@@ -38,7 +38,9 @@ class CmdCg(AthanorCommand):
             self.msg("No such character.")
             return
 
-        self.session.text_callable = StorytellerMenu(self.session, target)
+        self.caller.attributes.add("target", category="cg_menu", value=target)
+        self.caller.cmdset.add("storyteller.menu.StorytellerEditorMenu")
+        self.execute_cmd("menu")
 
     def func(self):
         if "edit" in self.switches:

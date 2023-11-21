@@ -14,3 +14,5 @@ def init(settings, plugins):
     settings.CMD_MODULES_CHARACTER.append("storyteller.commands")
 
     settings.STORYTELLER_DEFAULT_GAME = None
+
+    settings.ATHANOR_HANDLERS["character"]["story"] = "storyteller.handlers.GameHandler"

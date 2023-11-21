@@ -55,7 +55,49 @@ class RawHandler:
     load_order = 0
     context_delim = ":"
     context_delim_display = ": "
-    options_display: dict[str, str] = dict()
+    singular_name = "Thing"
+    plural_name = "Things"
+    use_context = False
+    enforce_context = False
+
+    @property
+    def options_syntax(self):
+        context = ""
+        if self.use_context:
+            context = "[:<context>]"
+        if self.enforce_context:
+            context = ":<context>"
+        return {
+            "set": f"set <{self.singular_name}>{context}=<value>",
+            "add": f"add <{self.singular_name}>{context}=<value>",
+            "remove": f"remove <{self.singular_name}>{context}=<value>",
+            "rank": f"rank <{self.singular_name}>{context}=<value>",
+            "create": f"create <{self.singular_name}>",
+            "delete": f"delete <{self.singular_name}>{context}",
+            "tag": f"tag <{self.singular_name}>{context}=<tag>",
+            "untag": f"untag <{self.singular_name}>{context}=<tag>",
+            "tier": f"tier <{self.singular_name}>{context}=<tier>",
+            "mod": f"mod <{self.singular_name}>{context}=<mod>",
+            "unmod": f"unmod <{self.singular_name}>{context}=<mod>",
+            "describe": f"describe <{self.singular_name}>{context}=<description>",
+        }
+
+    @property
+    def options_display(self):
+        return {
+            "add": f"Add a new {self.singular_name}.",
+            "remove": f"Remove a {self.singular_name}.",
+            "set": f"Set {self.singular_name} rating.",
+            "rank": f"Change {self.singular_name} rating.",
+            "create": f"Create a new {self.singular_name}.",
+            "delete": f"Delete character's {self.singular_name}.",
+            "tag": f"Tag a {self.singular_name}.",
+            "untag": f"Untag a {self.singular_name}.",
+            "tier": f"Set a {self.singular_name}'s Tier.",
+            "mod": f"Add a mod to a {self.singular_name}.",
+            "unmod": f"Remove a mod from a {self.singular_name}.",
+            "describe": f"Describe a {self.singular_name}.",
+        }
 
     @property
     def name(self):
@@ -107,7 +149,7 @@ class RawHandler:
             if len(path) < self.min_path_length:
                 operation.status = operation.st.HTTP_400_BAD_REQUEST
                 raise operation.ex(
-                    f"Invalid path given. ( Requires at least {self.min_path_length} elements. {self.path_format})"
+                    f"Invalid path given. ( Requires at least {self.min_path_length} elements.)"
                 )
             operation.variables["path"] = path
 
@@ -601,6 +643,14 @@ class GameHandler(RawHandler):
     options = ("set",)
     min_path_length = 0
     load_order = -999999999
+    singular_name = "Game"
+    plural_name = "Games"
+
+    @property
+    def options_display(self):
+        out = super().options_display
+        out["set"] = "Change character's game."
+        return out
 
     def render_help_header(self, lines: list[str]):
         lines.append(f"|c{self.name}:|n (Currently: |w{self.game}|n)")
@@ -625,10 +675,19 @@ class GameHandler(RawHandler):
         self.handlers_dict = {self.name: self}
         self.loaded = False
 
+        try:
+            self.load()
+        except Exception as err:
+            raise KeyError(str(err))
+
     def reload(self):
         self.loaded = False
         self.game = None
         self.load(reloading=True)
+
+    @property
+    def sheet(self):
+        return self.owner.sheet
 
     def load(self, reloading=False):
         if self.loaded:
@@ -801,26 +860,8 @@ class GameHandler(RawHandler):
     def shortcut_dict(self, data: dict):
         data["Game"] = (self, "set", [])
 
-    def generate_menu_commands(self, commands: dict):
-        commands["game"] = (self, "set", "game <game>", False, "Change Game")
-        commands["template"] = (
-            self.base.handlers_dict["Templates"],
-            "set",
-            "template <template>",
-            False,
-            "Change Template",
-        )
-        commands["field"] = (
-            self.base.handlers_dict["Fields"],
-            "set",
-            "field <field>=<value>",
-            True,
-            "Set Field",
-        )
-
     def _render_menu_help(self, looker) -> str:
         out = list()
-        out.append(looker.account.styled_separator("Game Select"))
         out.append(
             "Your GAME is the module which governs your character's sheet and storyteller rules."
         )
@@ -831,36 +872,6 @@ class GameHandler(RawHandler):
         out.append(
             f"|wAvailable Games|n: {', '.join([str(x) for x in self.get_choices()])}"
         )
-
-        tem_handler = self.base.handlers_dict["Templates"]
-        out.append(looker.account.styled_separator("Template Select"))
-        out.append("Your TEMPLATE is the type of character you'll be playing.")
-        out.append(
-            "|rWARNING:|n Changing your template |wmay wipe chunks of your sheet!|n"
-        )
-        tem = self.template()
-        out.append(f"Current Template: |w{tem}|n")
-        out.append(
-            f"|wAvailable Templates:|n {', '.join([str(x) for x in tem_handler.get_choices()])}"
-        )
-
-        fields = tem.get_fields(self.owner)
-        if fields:
-            out.append(looker.account.styled_separator("Field Select"))
-            out.append(
-                "FIELDS govern extra information about your character, like sub-types or affiliations."
-            )
-            out.append("Available fields depend on your Template.")
-            out.append("")
-            for field in fields:
-                if choices := tem.get_field_choices(self.owner, field):
-                    out.append(
-                        f"|w{field} Choices|n: {', '.join([str(x) for x in choices])}"
-                    )
-                else:
-                    out.append(f"|w{field} Choices|n: <anything>")
-                if current := tem.field(self.owner, field):
-                    out.append(f"  (Currently: |w{current}|n)")
 
         return "\n".join(out)
 
@@ -1041,7 +1052,13 @@ class _TemplateHandler(RawHandler):
     options = ("set",)
     min_path_length = 0
     sheet_render = False
-    menu_access = False
+    menu_access = True
+
+    @property
+    def options_display(self):
+        out = super().options_display
+        out["set"] = f"Change character's {self.singular_name}."
+        return out
 
     def get_choices(self):
         return list(self.game.templates.values())
@@ -1108,6 +1125,20 @@ class TemplateHandler(_TemplateHandler):
     def shortcut_dict(self, data: dict):
         data["Template"] = (self, "set", [])
 
+    def _render_menu_help(self, looker) -> str:
+        out = list()
+        tem_handler = self.base.handlers_dict["Templates"]
+        out.append("Your TEMPLATE is the type of character you'll be playing.")
+        out.append(
+            "|rWARNING:|n Changing your template |wmay wipe chunks of your sheet!|n"
+        )
+        tem = self.template()
+        out.append(f"Current Template: |w{tem}|n")
+        out.append(
+            f"|wAvailable Templates:|n {', '.join([str(x) for x in tem_handler.get_choices()])}"
+        )
+        return "\n".join(out)
+
 
 class FieldHandler(_TemplateHandler):
     """
@@ -1125,6 +1156,8 @@ class FieldHandler(_TemplateHandler):
     path_format = "<field>"
     load_order = -500
     min_path_length = 1
+    singular_name = "Field"
+    plural_name = "Fields"
 
     def render_help_extra(self, lines: list[str]):
         t = self.template()
@@ -1200,6 +1233,27 @@ class FieldHandler(_TemplateHandler):
         for k in self.get_choices():
             data[k] = (self, "set", [k])
 
+    def _render_menu_help(self, looker) -> str:
+        tem = self.template()
+        out = list()
+        fields = tem.get_fields(self.owner)
+        if fields:
+            out.append(
+                "FIELDS govern extra information about your character, like sub-types or affiliations."
+            )
+            out.append("Available fields depend on your Template.")
+            out.append("")
+            for field in fields:
+                if choices := tem.get_field_choices(self.owner, field):
+                    out.append(
+                        f"|w{field} Choices|n: {', '.join([str(x) for x in choices])}"
+                    )
+                else:
+                    out.append(f"|w{field} Choices|n: <anything>")
+                if current := tem.field(self.owner, field):
+                    out.append(f"  (Currently: |w{current}|n)")
+        return "\n".join(out)
+
 
 class StatHandler(BaseHandler):
     stat_category: str = None
@@ -1226,8 +1280,6 @@ class StatHandler(BaseHandler):
     enforce_context = False
     item_width = 23
     min_path_length_operation = {"create": 0}
-
-    singular_name = None
 
     def render_help_header(self, lines: list[str]):
         lines.append(f"|c{self.name}:|n (Type: |wStat|n)")
@@ -1679,9 +1731,6 @@ class AdvantageHandler(StatHandler):
     singular_name = "Advantage"
     options = ("set",)
     load_order = -50
-    options_display = {
-        "set": "Set Advantage to <value>.",
-    }
 
     def get_choices(self) -> list[str]:
         return getattr(self.template(), "advantages", list())
@@ -1728,10 +1777,6 @@ class AttributeHandler(StatHandler):
         "rank",
     )
     load_order = 0
-    options_display = {
-        "set": "Set Attribute to <value>.",
-        "rank": "Set Attribute to <value>.",
-    }
 
     def get_choices(self) -> list[str]:
         return getattr(self.game, "attributes", list())
@@ -1768,10 +1813,6 @@ class AbilityHandler(StatHandler):
         "rank",
     )
     load_order = 10
-    options_display = {
-        "set": "Set Ability to <value>.",
-        "rank": "Set Ability to <value>.",
-    }
 
     def get_choices(self) -> list[str]:
         return self.game.abilities
@@ -1864,17 +1905,55 @@ class PowerHandler(BaseHandler):
     possible choices at each stage, and relevant announce_  operations defined.
     """
 
-    options = ("add", "remove", "delete", "tag", "untag", "tier", "mod", "unmod")
+    options = (
+        "create",
+        "add",
+        "remove",
+        "delete",
+        "tag",
+        "untag",
+        "tier",
+        "mod",
+        "unmod",
+    )
     family = None
     min_path_length = 2
-    path_format = "<category>,<subcategory>"
     power_model = Power
     reverse_relation = "powers"
     singular_name = "power"
+    plural_name = "powers"
     dynamic_category = False
     dynamic_subcategory = False
     load_order = 50
     min_path_length_operation = {"tag": 3, "untag": 3, "tier": 3, "mod": 3, "unmod": 3}
+
+    @property
+    def options_syntax(self):
+        return {
+            "create": f"create <category>/<subcategory>=<{self.singular_name}>",
+            "add": f"add <category>/<subcategory>=<{self.singular_name}>",
+            "remove": f"remove <category>/<subcategory>=<{self.singular_name}>",
+            "delete": f"delete <category>/<subcategory>=<{self.singular_name}>",
+            "tag": f"tag <category>/<subcategory>/<{self.singular_name}>=<tag>",
+            "untag": f"untag <category>/<subcategory>/<{self.singular_name}>=<tag>",
+            "tier": f"tier <category>/<subcategory>/<{self.singular_name}>=<tier>",
+            "mod": f"mod <category>/<subcategory>/<{self.singular_name}>=<mod>",
+            "unmod": f"unmod <category>/<subcategory>/<{self.singular_name}>=<mod>",
+        }
+
+    @property
+    def options_display(self):
+        return {
+            "create": f"Create a new {self.singular_name}",
+            "add": f"Add a {self.singular_name} to your sheet.",
+            "remove": f"Remove a {self.singular_name} from your sheet.",
+            "delete": f"Delete a {self.singular_name} from character.",
+            "tag": f"Tag a {self.singular_name} with a tag.",
+            "untag": f"Remove a tag from a {self.singular_name}.",
+            "tier": f"Set a {self.singular_name}'s tier.",
+            "mod": f"Set a {self.singular_name}'s mod.",
+            "unmod": f"Remove a mod from a {self.singular_name}.",
+        }
 
     def clear(self):
         self._get_reverse().filter(power__family__iexact=self.family).delete()

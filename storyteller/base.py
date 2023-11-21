@@ -210,8 +210,8 @@ class Pool:
         """
         Calculate the maximum for a pool.
         """
-        story = get_story(target)
-        pool, created = target.sheet.pools.get_or_create(name=str(self))
+        story = target.h.story
+        pool, created = story.sheet.pools.get_or_create(name=str(self))
         t = story.template()
         out = [pool.bonus]
         if func := getattr(
@@ -221,23 +221,24 @@ class Pool:
         return sum(out)
 
     def target_has_pool(self, target) -> bool:
-        story = get_story(target)
+        story = target.h.story
         t = story.template()
         return (
             t.has_pool(target, str(self))
-            or target.sheet.pools.filter(name=str(self), bonus__gt=0).exists()
+            or story.sheet.pools.filter(name=str(self), bonus__gt=0).exists()
         )
 
     def total_committed(self, target) -> int:
-        story = get_story(target)
-        pool, created = target.sheet.pools.get_or_create(name=str(self))
+        story = target.h.story
+        pool, created = story.sheet.pools.get_or_create(name=str(self))
+        out = list()
         if commits := pool.commits.all():
-            return sum([p.value for p in commits])
-        return 0
+            out.extend(p.value for p in commits)
+        return sum(out)
 
     def total_spent(self, target) -> int:
-        story = get_story(target)
-        pool, created = target.sheet.pools.get_or_create(name=str(self))
+        story = target.h.story
+        pool, created = story.sheet.pools.get_or_create(name=str(self))
         return pool.spent
 
     def maximum_possible(self, target) -> int:
