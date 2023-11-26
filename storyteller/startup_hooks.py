@@ -24,23 +24,24 @@ def at_server_start():
     how it was shut down.
     """
     from django.conf import settings
-    from evennia.utils import class_from_module, callables_from_module
+    from evennia.utils import class_from_module, callables_from_module, logger
     import storyteller
 
-    try:
-        for k, v in settings.STORYTELLER_GAMES.items():
-            path = None
-            name = None
-            key = None
-            if not (isinstance(v, (list, tuple)) and len(v) >= 2):
-                raise ValueError("Invalid storyteller module definition.")
-            path = v[0]
-            name = v[1]
-            if len(v) >= 3:
-                key = v[2]
+    for k, v in settings.STORYTELLER_GAMES.items():
+        path = None
+        name = None
+        key = None
+        if not (isinstance(v, (list, tuple)) and len(v) >= 2):
+            raise ValueError("Invalid storyteller module definition.")
+        path = v[0]
+        name = v[1]
+        if len(v) >= 3:
+            key = v[2]
 
+        try:
             located = class_from_module(path)
             game = located(k, name, key=key)
             storyteller.GAMES[k] = game
-    except Exception as err:
-        print(err)
+        except Exception:
+            logger.log_trace()
+            continue

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from athanor.utils import utcnow
 
 
 class SheetInfo(models.Model):
@@ -255,6 +256,7 @@ class Pool(models.Model):
     sheet = models.ForeignKey(SheetInfo, on_delete=models.CASCADE, related_name="pools")
     name = models.CharField(max_length=30, blank=False, null=False)
     spent = models.IntegerField(blank=False, null=False, default=0)
+    bonus = models.IntegerField(blank=False, null=False, default=0)
 
     def __str__(self):
         return self.name
@@ -266,7 +268,6 @@ class Pool(models.Model):
 class PoolCommit(models.Model):
     pool = models.ForeignKey(Pool, on_delete=models.CASCADE, related_name="commits")
     value = models.IntegerField(blank=False, null=False, default=0)
-    bonus = models.IntegerField(blank=False, null=False, default=0)
     description = models.TextField(blank=True, null=False, default="")
 
     def __str__(self):
@@ -292,3 +293,64 @@ class CreateEntry(models.Model):
     class Meta:
         ordering = ["-date"]
         unique_together = (("content_type", "object_id"),)
+
+
+class Experience(models.Model):
+    """
+    This model stores the experience a character has.
+    """
+
+    sheet = models.ForeignKey(SheetInfo, on_delete=models.CASCADE, related_name="xp")
+    name = models.CharField(max_length=30, blank=False, null=False)
+    description = models.TextField(blank=True, null=False, default="")
+
+    def __str__(self):
+        return str(self.name)
+
+    class Meta:
+        unique_together = (("sheet", "name"),)
+
+    def awarded(self) -> int:
+        """
+        Returns the sum of all positive Transactions for this Experience.
+        """
+        return (
+            self.transactions.filter().aggregate(models.Sum("amount"))["amount__sum"]
+            or 0
+        )
+
+    def spent(self) -> int:
+        """
+        Returns the sum of all negative Transactions for this Experience.
+        """
+        return abs(
+            (
+                self.transactions.filter(amount__lt=0).aggregate(models.Sum("amount"))[
+                    "amount__sum"
+                ]
+                or 0
+            )
+        )
+
+    def current(self) -> int:
+        """
+        Returns the sum of all Transactions for this Experience.
+        """
+        return (
+            self.transactions.all().aggregate(models.Sum("amount"))["amount__sum"] or 0
+        )
+
+    def create_transaction(self, amount: int, explanation: str = None):
+        """
+        Creates a Transaction for this Experience.
+        """
+        self.transactions.create(amount=amount, explanation=explanation)
+
+
+class ExperienceTransaction(models.Model):
+    exp = models.ForeignKey(
+        Experience, on_delete=models.CASCADE, related_name="transactions"
+    )
+    amount = models.IntegerField(blank=False, null=False, default=0)
+    date_created = models.DateTimeField(blank=False, null=False, default=utcnow)
+    explanation = models.TextField(blank=True, null=False, default="")

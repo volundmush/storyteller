@@ -143,6 +143,8 @@ class Game:
         self.handlers = list()
         self.pools = list()
         self.pools_dict = dict()
+        self.experiences = list()
+        self.experiences_dict = dict()
         self.default_template = "Mortal"
 
     def __str__(self):
@@ -164,6 +166,15 @@ class Game:
         self.pools.sort(key=lambda x: x.sort_order)
         for pool in pools:
             self.pools_dict[str(pool)] = pool
+
+    def setup_experiences(self, path: str):
+        experiences = list()
+        for k, v in callables_from_module(path).items():
+            experiences.append(v(self))
+        self.experiences.extend(experiences)
+        self.experiences.sort(key=lambda x: x.sort_order)
+        for exp in experiences:
+            self.experiences_dict[str(exp)] = exp
 
     def get_handlers(self, character):
         return self.handlers
@@ -246,3 +257,39 @@ class Pool:
 
     def total_available(self, target) -> int:
         return self.maximum_possible(target) - self.total_spent(target)
+
+
+class Experience:
+    """
+    Abstract base class for dealing with Experience Types.
+    Some games have only one type, but others have many.
+    """
+
+    # Used for display ordering.
+    sort_order = 0
+
+    def __init__(self, game):
+        self.game = game
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    def spent(self, target) -> int:
+        story = target.h.story
+        exp, created = story.sheet.xp.get_or_create(name=str(self))
+        return exp.spent()
+
+    def awarded(self, target) -> int:
+        story = target.h.story
+        exp, created = story.sheet.xp.get_or_create(name=str(self))
+        return exp.awarded()
+
+    def current(self, target) -> int:
+        story = target.h.story
+        exp, created = story.sheet.xp.get_or_create(name=str(self))
+        return exp.current()
+
+    def create_transaction(self, target, amount: int, reason: str = None):
+        story = target.h.story
+        exp, created = story.sheet.xp.get_or_create(name=str(self))
+        exp.create_transaction(amount, reason)

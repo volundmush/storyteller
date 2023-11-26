@@ -96,10 +96,12 @@ class CmdMode(_EditorMenuCommand):
 
 class CmdSet(StoryMenuCommand):
     key = "set"
+    menu_sort = -80
 
 
 class CmdTier(StoryMenuCommand):
     key = "tier"
+    menu_sort = -75
 
 
 class CmdContext(StoryMenuCommand):
@@ -107,31 +109,38 @@ class CmdContext(StoryMenuCommand):
 
 
 class CmdRank(StoryMenuCommand):
+    menu_sort = -79
     key = "rank"
 
 
 class CmdTag(StoryMenuCommand):
+    menu_sort = -60
     key = "tag"
 
 
 class CmdUntag(StoryMenuCommand):
+    menu_sort = -59
     key = "untag"
 
 
 class CmdMod(StoryMenuCommand):
     key = "mod"
+    menu_sort = -50
 
 
 class CmdUnMod(StoryMenuCommand):
     key = "unmod"
+    menu_sort = -49
 
 
 class CmdDescribe(StoryMenuCommand):
     key = "describe"
+    menu_sort = -40
 
 
 class CmdCreate(StoryMenuCommand):
     key = "create"
+    menu_sort = -200
 
     @property
     def use_equals(self):
@@ -145,6 +154,7 @@ class CmdCreate(StoryMenuCommand):
 
 class CmdDelete(StoryMenuCommand):
     key = "delete"
+    menu_sort = -89
 
     def use_equals(self):
         return (
@@ -153,6 +163,16 @@ class CmdDelete(StoryMenuCommand):
             )
             - 1
         ) > 0
+
+
+class CmdAdd(StoryMenuCommand):
+    menu_sort = -100
+    key = "add"
+
+
+class CmdRemove(StoryMenuCommand):
+    menu_sort = -90
+    key = "remove"
 
 
 class StorytellerEditorMenu(MenuCmdSet):
@@ -172,6 +192,8 @@ class StorytellerEditorMenu(MenuCmdSet):
         CmdMode,
         CmdDescribe,
         CmdContext,
+        CmdAdd,
+        CmdRemove,
     ]
 
     def end_menu(self):

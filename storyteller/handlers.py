@@ -652,6 +652,12 @@ class GameHandler(RawHandler):
         out["set"] = "Change character's game."
         return out
 
+    @property
+    def options_syntax(self):
+        out = super().options_syntax
+        out["set"] = "set <game>"
+        return out
+
     def render_help_header(self, lines: list[str]):
         lines.append(f"|c{self.name}:|n (Currently: |w{self.game}|n)")
 
@@ -1081,6 +1087,12 @@ class TemplateHandler(_TemplateHandler):
     name = "Templates"
     load_order = -1000
 
+    @property
+    def options_syntax(self):
+        out = super().options_syntax
+        out["set"] = "set <template>"
+        return out
+
     def render_help_header(self, lines: list[str]):
         lines.append(f"|c{self.name}:|n (Currently: |w{self.template()}|n)")
 
@@ -1446,7 +1458,8 @@ class StatHandler(BaseHandler):
 
         stat_name, context = self.parse_context(operation, path[0])
         rating = self.check_rating(operation, stat_name, context, value)
-        srank = self.check_srank(operation, stat_name, context)
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context)
 
         self._op_value(operation, srank, rating)
 
@@ -1457,9 +1470,8 @@ class StatHandler(BaseHandler):
 
         stat_name, context = self.parse_context(operation, path[0])
         rating = self.check_rating(operation, stat_name, context, value)
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True)
         self._op_value(operation, srank, rating)
 
     def op_context(self, operation: Operation):
@@ -1468,9 +1480,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True)
         v["rank"] = srank
 
         new_context = self.check_context(operation, stat_name, value)
@@ -1504,9 +1515,8 @@ class StatHandler(BaseHandler):
         value = v["value"]
 
         stat_name, context = self.parse_context(operation, path[0])
-        srank = self.check_srank(
-            operation, stat_name, context, partial=True, create=False
-        )
+        stat = self.check_stat(operation, stat_name)
+        srank = self.check_srank(operation, stat, context, partial=True)
         v["rank"] = srank
         v["description_before"] = srank.description
 

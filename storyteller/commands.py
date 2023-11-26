@@ -3,7 +3,11 @@ from athanor.commands import AthanorCommand, AthanorAccountCommand
 from .utils import get_story
 
 
-class CmdCg(AthanorCommand):
+class _StoryCmd(AthanorCommand):
+    help_category = "Storyteller"
+
+
+class CmdCg(_StoryCmd):
     key = "cg"
     delim = "|"
 
@@ -113,10 +117,9 @@ class CmdCg(AthanorCommand):
         self.op_message(op)
 
 
-class CmdSheet(AthanorCommand):
+class CmdSheet(_StoryCmd):
     key = "sheet"
     locks = "cmd:all()"
-    help_category = "Storyteller"
 
     def func(self):
         if not (target := self.caller.search(self.args) if self.args else self.caller):
